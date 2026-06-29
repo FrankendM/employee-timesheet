@@ -130,9 +130,89 @@ function buildAdminDetailGrid(stats) {
       recentCard.appendChild(item);
     });
   }
+
+
   grid.appendChild(recentCard);
 
+  // ── Weekly Attendance Chart ────────────────────────
+  grid.appendChild(buildWeeklyAttendanceChart(stats));
+
   return grid;
+}
+
+function buildWeeklyAttendanceChart(stats) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `<div class="card-header">Weekly Attendance (This Week)</div>`;
+
+  const week = stats.weekly_attendance || [];
+
+  if (!week.length) {
+    card.innerHTML += `<div class="table-empty">No weekly data available</div>`;
+    return card;
+  }
+
+  const maxVal = Math.max(...week.map(d => (d.present || 0) + (d.late || 0) + (d.absent || 0)), 1);
+
+  const chartWrap = document.createElement("div");
+  chartWrap.style.cssText = "display:flex;align-items:flex-end;gap:10px;height:140px;padding:8px 4px 0;";
+
+  week.forEach(day => {
+    const present = day.present || 0;
+    const late    = day.late    || 0;
+    const absent  = day.absent  || 0;
+    const total   = present + late + absent;
+
+    const col = document.createElement("div");
+    col.style.cssText = "flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;";
+    col.title = `${day.day_label}: ${present} present, ${late} late, ${absent} absent`;
+
+    const barWrap = document.createElement("div");
+    barWrap.style.cssText = "width:100%;display:flex;flex-direction:column-reverse;gap:1px;border-radius:6px;overflow:hidden;";
+    barWrap.style.height = `${Math.round((total / maxVal) * 100)}px`;
+
+    if (absent > 0) {
+      const seg = document.createElement("div");
+      seg.style.cssText = `flex:${absent};background:#f87171;min-height:4px;`;
+      barWrap.appendChild(seg);
+    }
+    if (late > 0) {
+      const seg = document.createElement("div");
+      seg.style.cssText = `flex:${late};background:#fb923c;min-height:4px;`;
+      barWrap.appendChild(seg);
+    }
+    if (present > 0) {
+      const seg = document.createElement("div");
+      seg.style.cssText = `flex:${present};background:#34d399;min-height:4px;`;
+      barWrap.appendChild(seg);
+    }
+
+    const label = document.createElement("div");
+    label.style.cssText = "font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-top:4px;";
+    label.textContent = day.day_label || "—";
+
+    col.appendChild(barWrap);
+    col.appendChild(label);
+    chartWrap.appendChild(col);
+  });
+
+  const legend = document.createElement("div");
+  legend.style.cssText = "display:flex;gap:14px;margin-top:10px;padding:0 4px;";
+  legend.innerHTML = `
+    <span style="font-size:0.75rem;display:flex;align-items:center;gap:5px;color:var(--text-muted)">
+      <span style="width:10px;height:10px;border-radius:3px;background:#34d399;display:inline-block"></span>Present
+    </span>
+    <span style="font-size:0.75rem;display:flex;align-items:center;gap:5px;color:var(--text-muted)">
+      <span style="width:10px;height:10px;border-radius:3px;background:#fb923c;display:inline-block"></span>Late
+    </span>
+    <span style="font-size:0.75rem;display:flex;align-items:center;gap:5px;color:var(--text-muted)">
+      <span style="width:10px;height:10px;border-radius:3px;background:#f87171;display:inline-block"></span>Absent
+    </span>
+  `;
+
+  card.appendChild(chartWrap);
+  card.appendChild(legend);
+  return card;
 }
 
 // ── Fallback (client-computed) — used only if dashboard.php call failed ──

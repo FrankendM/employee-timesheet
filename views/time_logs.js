@@ -431,17 +431,54 @@ function openEditModal(log, db, onSaved) {
   const shiftOptions  = db.shiftCategories.map(s => [s.shift_category_id, s.category_name]);
   const statusOptions = db.attendanceStatuses.map(s => [s.status_id, s.status_label]);
 
+  // Convert stored datetime to local datetime-local input format
+  function toDatetimeLocal(dtStr) {
+    if (!dtStr) return "";
+    const d = new Date(dtStr);
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   const form = document.createElement("div");
   form.className = "form-grid";
   form.style.display = "flex";
   form.style.flexDirection = "column";
   form.style.gap = "14px";
 
+  const fClockIn  = makeInput("datetime-local", toDatetimeLocal(log.clock_in));
+  const fClockOut = makeInput("datetime-local", toDatetimeLocal(log.clock_out));
   const shiftSel  = makeSelect(shiftOptions,  log.shift_category_id);
   const statusSel = makeSelect(statusOptions, log.status_id);
 
+  // Live-compute hours preview
+  const hoursPreview = document.createElement("div");
+  hoursPreview.style.cssText = "font-size:0.82rem;color:var(--text-muted);margin-top:-8px";
+
+  function updateHoursPreview() {
+    const inVal  = fClockIn.value;
+    const outVal = fClockOut.value;
+    if (inVal && outVal) {
+      const diff = (new Date(outVal) - new Date(inVal)) / 3600000;
+      hoursPreview.textContent = diff > 0
+        ? `Computed hours: ${diff.toFixed(2)}h`
+        : "⚠ Clock-out must be after clock-in";
+    } else {
+      hoursPreview.textContent = "";
+    }
+  }
+  fClockIn.addEventListener("change", updateHoursPreview);
+  fClockOut.addEventListener("change", updateHoursPreview);
+
+  form.appendChild(buildField("Clock In", fClockIn));
+  form.appendChild(buildField("Clock Out (leave blank if active)", fClockOut));
+  form.appendChild(hoursPreview);
   form.appendChild(buildField("Shift Category", shiftSel));
   form.appendChild(buildField("Status", statusSel));
+
+  const errEl = document.createElement("div");
+  errEl.className = "alert-error";
+  errEl.style.display = "none";
+  form.appendChild(errEl);
 
   const footer = document.createElement("div");
   footer.className = "modal-footer";
@@ -461,18 +498,41 @@ function openEditModal(log, db, onSaved) {
   const { close } = openModal({
     title: `Edit Log — ${log.full_name || "Employee"} (${fmtDate(log.clock_in)})`,
     body: form,
-    onClose: () => {},
   });
 
   cancelBtn.addEventListener("click", close);
 
   saveBtn.addEventListener("click", async () => {
+    const inVal  = fClockIn.value;
+    const outVal = fClockOut.value;
+
+    if (!inVal) {
+      errEl.textContent = "Clock-in time is required.";
+      errEl.style.display = "block";
+      return;
+    }
+    if (outVal && new Date(outVal) <= new Date(inVal)) {
+      errEl.textContent = "Clock-out must be after clock-in.";
+      errEl.style.display = "block";
+      return;
+    }
+
+    // Recompute total_hours client-side so the table updates immediately
+    const total_hours = outVal
+      ? parseFloat(((new Date(outVal) - new Date(inVal)) / 3600000).toFixed(4))
+      : null;
+
+    errEl.style.display = "none";
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
+
     try {
       const updated = await updateTimeLogRequest(log.log_id, {
+        clock_in:          inVal,
+        clock_out:         outVal || null,
+        total_hours,
         shift_category_id: parseInt(shiftSel.value),
-        status_id: parseInt(statusSel.value),
+        status_id:         parseInt(statusSel.value),
       });
       close();
       onSaved(updated);
@@ -483,4 +543,6 @@ function openEditModal(log, db, onSaved) {
       saveBtn.textContent = "Save Changes";
     }
   });
+
+  updateHoursPreview();
 }

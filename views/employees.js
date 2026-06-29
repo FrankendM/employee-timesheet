@@ -64,20 +64,33 @@ function renderEmployees(db, onDbChange) {
       `;
 
       const editBtn = document.createElement("button");
-      editBtn.className = "btn btn-ghost btn-sm";
-      editBtn.innerHTML = `${icons.pencil} Edit`;
-      editBtn.addEventListener("click", () => openEmployeeModal(e));
+        editBtn.className = "btn btn-ghost btn-sm";
+        editBtn.innerHTML = `${icons.pencil} Edit`;
+        editBtn.addEventListener("click", () => openEmployeeModal(e));
 
-      return [
-        empCell,
-        `<span class="text-xs">${e.department_name || "—"}</span>`,
-        `<span class="text-xs text-gray">${e.role_name || "—"}</span>`,
-        `<span class="mono text-xs">₱${e.current_hourly_rate}/hr</span>`,
-        badge(e.employment_status),
-        `<span class="mono text-xs text-gray">${fmtDate(e.hire_date)}</span>`,
-        editBtn,
-      ];
-    });
+        const isActive = e.employment_status === "Active";
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "btn btn-ghost btn-sm";
+        toggleBtn.textContent = isActive ? "Deactivate" : "Reactivate";
+        toggleBtn.style.color = isActive ? "var(--red, #ef4444)" : "var(--emerald, #10b981)";
+        toggleBtn.addEventListener("click", () => toggleEmployeeStatus(e));
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.gap = "6px";
+        actions.appendChild(editBtn);
+        actions.appendChild(toggleBtn);
+
+        return [
+          empCell,
+          `<span class="text-xs">${e.department_name || "—"}</span>`,
+          `<span class="text-xs text-gray">${e.role_name || "—"}</span>`,
+          `<span class="mono text-xs">₱${e.current_hourly_rate}/hr</span>`,
+          badge(e.employment_status),
+          `<span class="mono text-xs text-gray">${fmtDate(e.hire_date)}</span>`,
+          actions,
+        ];
+        });
 
     const table = buildTable(["Employee", "Department", "Role", "Hourly Rate", "Status", "Hired", ""], rows);
     card.appendChild(table);
@@ -201,6 +214,25 @@ function renderEmployees(db, onDbChange) {
       }
     });
   }
+
+    async function toggleEmployeeStatus(emp) {
+      const isActive = emp.employment_status === "Active";
+      const newStatus = isActive ? "Inactive" : "Active";
+      const msg = isActive
+        ? `Deactivate ${emp.full_name}? They will be marked Inactive.`
+        : `Reactivate ${emp.full_name}? They will be marked Active.`;
+      if (!confirm(msg)) return;
+      try {
+        await updateEmployeeRequest(emp.employee_id, { ...emp, employment_status: newStatus });
+        db.employees = await apiRequest("/employees.php");
+        onDbChange(db);
+        showToast(`${emp.full_name} marked as ${newStatus}.`, "success");
+        refresh();
+      } catch (err) {
+        showToast(err.message || "Could not update status.", "error");
+      }
+    }
+
 
   render();
   return page;
