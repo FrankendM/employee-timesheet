@@ -3,18 +3,17 @@ let db          = emptyDb();
 let account     = null;
 let activeView  = "dashboard";
 let loadError   = null;
-let checkingSession = true; // true until the initial auth.php?action=me check resolves
+let checkingSession = true;
 
 const root = document.getElementById("app");
 
-// ── Icons for clock/logs ──────────────────────────────
+// ── Icons ─────────────────────────────────────────────
 const clockIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 const logsIcon  = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+const payIcon   = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
+const shiftIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><line x1="2" y1="2" x2="22" y2="22" stroke-width="1.5"/></svg>`;
 
 // ── Boot screen ───────────────────────────────────────
-// Shown only while we're checking whether an existing session cookie is
-// still valid (auth.php?action=me). Keeps refreshes from flashing the
-// login screen before we know if the user is actually logged in.
 function renderBootScreen() {
   const wrap = document.createElement("div");
   wrap.className = "boot-screen";
@@ -25,25 +24,29 @@ function renderBootScreen() {
   return wrap;
 }
 
-// Admin nav
+// ── Navigation ────────────────────────────────────────
+// Admin nav — includes Payroll, Shift Categories
 const adminNav = [
-  { id: "dashboard",     label: "Dashboard",     icon: icons.dashboard },
-  { id: "employees",     label: "Employees",     icon: icons.users     },
-  { id: "departments",   label: "Departments",   icon: icons.briefcase },
-  { id: "accounts",      label: "Accounts",      icon: icons.userPlus  },
-  { id: "leave_records", label: "Leave Records", icon: icons.fileText  },
-  { id: "my_logs",       label: "Time Logs",     icon: logsIcon        },
+  { id: "dashboard",        label: "Dashboard",         icon: icons.dashboard },
+  { id: "employees",        label: "Employees",         icon: icons.users     },
+  { id: "departments",      label: "Departments",       icon: icons.briefcase },
+  { id: "accounts",         label: "Accounts",          icon: icons.userPlus  },
+  { id: "leave_records",    label: "Leave Records",     icon: icons.fileText  },
+  { id: "my_logs",          label: "Time Logs",         icon: logsIcon        },
+  { id: "payroll",          label: "Payroll",           icon: payIcon         },
+  { id: "shift_categories", label: "Shift Categories",  icon: shiftIcon       },
 ];
 
-// Employee nav
+// Employee nav — includes My Pay History
 const employeeNav = [
-  { id: "dashboard",     label: "Dashboard",     icon: icons.dashboard },
-  { id: "time_logs",     label: "Clock In / Out",icon: clockIcon       },
-  { id: "my_logs",       label: "My Time Logs",  icon: logsIcon        },
-  { id: "leave_records", label: "My Leave",      icon: icons.fileText  },
+  { id: "dashboard",     label: "Dashboard",    icon: icons.dashboard },
+  { id: "time_logs",     label: "Clock In / Out", icon: clockIcon     },
+  { id: "my_logs",       label: "My Time Logs", icon: logsIcon        },
+  { id: "leave_records", label: "My Leave",     icon: icons.fileText  },
+  { id: "payroll",       label: "My Pay",       icon: payIcon         },
 ];
 
-// ── Load data ─────────────────────────────────────────
+// ── Data load ─────────────────────────────────────────
 async function loadDb() {
   try {
     db = await fetchAllData();
@@ -83,8 +86,9 @@ async function renderApp() {
 
   const isAdmin = account.access_level === "admin";
 
-  const allowedAdmin    = ["dashboard", "employees", "departments", "accounts", "leave_records", "my_logs"];
-  const allowedEmployee = ["dashboard", "time_logs", "my_logs", "leave_records"];
+  const allowedAdmin    = ["dashboard", "employees", "departments", "accounts",
+                           "leave_records", "my_logs", "payroll", "shift_categories"];
+  const allowedEmployee = ["dashboard", "time_logs", "my_logs", "leave_records", "payroll"];
   const allowed = isAdmin ? allowedAdmin : allowedEmployee;
 
   if (!allowed.includes(activeView)) activeView = "dashboard";
@@ -139,6 +143,13 @@ async function renderApp() {
     case "my_logs":
       view = renderMyLogs(db, account, dbChangeHandler);
       break;
+    case "payroll":
+      // Admin: full payroll management; Employee: own pay history
+      view = renderPayroll(db, account, dbChangeHandler);
+      break;
+    case "shift_categories":
+      view = isAdmin ? renderShiftCategories(db, dbChangeHandler) : renderDashboard(db, account);
+      break;
     default:
       view = renderDashboard(db, account);
   }
@@ -150,17 +161,13 @@ async function renderApp() {
 }
 
 // ── Boot ──────────────────────────────────────────────
-// On a fresh page load (including refresh/Ctrl+R), `account` always starts
-// null in JS — but the PHPSESSID cookie may still be valid server-side.
-// Ask the backend before deciding to show the login screen, so a reload
-// doesn't force the user to log in again while their session is still good.
 async function boot() {
-  renderApp(); // shows the boot screen immediately (checkingSession is true)
+  renderApp();
 
   try {
     account = await apiRequest("/auth.php?action=me");
   } catch (err) {
-    account = null; // no valid session (or it expired) — show login normally
+    account = null;
   }
 
   if (account) {

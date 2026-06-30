@@ -192,7 +192,7 @@ body {
   min-height: 100vh;
   overflow-y: auto;
 }
-.page { padding: 28px 32px; }
+.page { padding: 32px 36px; }
 
 /* ── Page header ───────────────────────────────────── */
 .page-header {
@@ -200,17 +200,17 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 .page-header-text h1 {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--gray-900);
 }
 .page-header-text p {
   font-size: 13px;
   color: var(--gray-500);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 /* ── Cards ─────────────────────────────────────────── */
@@ -219,6 +219,10 @@ body {
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+/* Generate strip and other non-table cards get inner padding */
+.card-padded {
+  padding: 20px 24px;
 }
 
 /* ── Stat Cards ────────────────────────────────────── */
