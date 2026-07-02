@@ -71,16 +71,55 @@ function renderShiftCategories(db, onDbChange) {
     page.appendChild(card);
   }
 
-  async function deleteShift(s) {
-    if (!confirm(`Delete shift "${s.category_name}"? This will fail if time logs use this shift.`)) return;
-    try {
-      await apiRequest(`/shift_categories.php?id=${s.shift_category_id}`, { method: "DELETE" });
-      await reloadShifts();
-      showToast("Shift category deleted.", "success");
-      refresh();
-    } catch (err) {
-      showToast(err.message || "Could not delete shift.", "error");
-    }
+  // ── Delete confirmation modal ─────────────────────────
+  function deleteShift(s) {
+    const body = document.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "18px";
+
+    const message = document.createElement("p");
+    message.className = "text-sm";
+    message.textContent = `Are you sure you want to delete the shift "${s.category_name}"? This will fail if time logs use this shift.`;
+
+    body.appendChild(message);
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer";
+
+    const keepBtn = document.createElement("button");
+    keepBtn.className = "btn btn-outline";
+    keepBtn.textContent = "Keep Shift";
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn btn-danger";
+    deleteBtn.innerHTML = `Delete Shift`;
+
+    footer.appendChild(keepBtn);
+    footer.appendChild(deleteBtn);
+    body.appendChild(footer);
+
+    const { close } = openModal({
+      title: "Delete Shift Category",
+      body,
+    });
+
+    keepBtn.addEventListener("click", close);
+
+    deleteBtn.addEventListener("click", async () => {
+      deleteBtn.disabled = true;
+
+      try {
+        await apiRequest(`/shift_categories.php?id=${s.shift_category_id}`, { method: "DELETE" });
+        await reloadShifts();
+        close();
+        showToast("Shift category deleted.", "success");
+        refresh();
+      } catch (err) {
+        showToast(err.message || "Could not delete shift.", "error");
+        deleteBtn.disabled = false;
+      }
+    });
   }
 
   function openShiftModal(existing) {
