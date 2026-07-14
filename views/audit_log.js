@@ -168,7 +168,14 @@ function renderAuditLog(db, onDbChange) {
   function targetLabel(entry) {
     if (entry.target_type === "account") {
       const acc = db.accounts.find(a => a.account_id === entry.target_id);
-      const uname = (entry.details && entry.details.username) || (acc && acc.username);
+      let uname = acc && acc.username;
+      const d = entry.details;
+      if (d && d.username) {
+        // account_update stores { from, to }; create/delete store a plain string
+        uname = (d.username && typeof d.username === "object" && "to" in d.username)
+          ? d.username.to
+          : d.username;
+      }
       return uname ? `Account "${uname}"` : `Account #${entry.target_id ?? "—"}`;
     }
     if (entry.target_type === "payroll_period") {
