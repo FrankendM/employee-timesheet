@@ -1,7 +1,6 @@
 // ── Dashboard view ────────────────────────────────────
-// Admin: full workforce overview (TSK-38, TSK-36)
-// Employee: personal overview with clock status, hours, leaves,
-//           recent time logs list, and pay summary (TSK-18, TSK-19, TSK-20)
+// Admin: full workforce overview 
+// Employee: personal overview with clock status, hours, leaves, recent time logs list, and pay summary 
 
 function renderDashboard(db, account) {
   const page = document.createElement("div");
