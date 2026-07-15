@@ -160,7 +160,7 @@ function renderAdminPayroll(db, account, onDbChange) {
         approveBtn.className = "btn btn-ghost btn-sm";
         approveBtn.style.color = "var(--emerald, #10b981)";
         approveBtn.textContent = "Approve";
-        approveBtn.addEventListener("click", () => approvePeriod(p));
+        approveBtn.addEventListener("click", () => confirmApprove(p));
       }
 
       const unapproveBtn = document.createElement("button");
@@ -168,7 +168,7 @@ function renderAdminPayroll(db, account, onDbChange) {
         unapproveBtn.className = "btn btn-ghost btn-sm";
         unapproveBtn.style.color = "var(--red, #ef4444)";
         unapproveBtn.textContent = "Unapprove";
-        unapproveBtn.addEventListener("click", () => unapprovePeriod(p));
+        unapproveBtn.addEventListener("click", () => confirmUnapprove(p));
       }
 
       const actions = document.createElement("div");
@@ -214,28 +214,96 @@ function renderAdminPayroll(db, account, onDbChange) {
     }
   }
 
-  async function approvePeriod(p) {
+  // ── Approve confirmation modal ────────────────────
+  function confirmApprove(p) {
     const monthLabel = monthNames[p.period_month - 1];
-    if (!confirm(`Approve payroll for ${p.department_name} — ${monthLabel} ${p.period_year}? This cannot be undone.`)) return;
-    try {
-      await approvePayrollPeriodRequest(p.period_id);
-      showToast("Payroll period approved and locked.", "success");
-      await loadPeriods(filterDept.value);
-    } catch (err) {
-      showToast(err.message || "Could not approve period.", "error");
-    }
+
+    const body = document.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "18px";
+
+    const message = document.createElement("p");
+    message.className = "text-sm";
+    message.textContent = `Are you sure you want to approve payroll for ${p.department_name} — ${monthLabel} ${p.period_year}? This locks all records and cannot be undone.`;
+    body.appendChild(message);
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn btn-outline";
+    cancelBtn.textContent = "Cancel";
+
+    const approveBtn = document.createElement("button");
+    approveBtn.className = "btn btn-primary";
+    approveBtn.innerHTML = `${icons.check} Approve`;
+
+    footer.appendChild(cancelBtn);
+    footer.appendChild(approveBtn);
+    body.appendChild(footer);
+
+    const { close } = openModal({ title: "Approve Payroll Period", body });
+    cancelBtn.addEventListener("click", close);
+
+    approveBtn.addEventListener("click", async () => {
+      approveBtn.disabled = true;
+      try {
+        await approvePayrollPeriodRequest(p.period_id);
+        close();
+        showToast("Payroll period approved and locked.", "success");
+        await loadPeriods(filterDept.value);
+      } catch (err) {
+        showToast(err.message || "Could not approve period.", "error");
+        approveBtn.disabled = false;
+      }
+    });
   }
 
-  async function unapprovePeriod(p) {
-  const monthLabel = monthNames[p.period_month - 1];
-    if (!confirm(`Revert payroll for ${p.department_name} — ${monthLabel} ${p.period_year} back to Draft?`)) return;
-    try {
-      await apiRequest(`/payroll.php?action=unapprove&period_id=${p.period_id}`, { method: "POST" });
-      showToast("Payroll period reverted to Draft.", "success");
-      await loadPeriods(filterDept.value);
-    } catch (err) {
-      showToast(err.message || "Could not unapprove period.", "error");
-    }
+  // ── Unapprove confirmation modal ──────────────────
+  function confirmUnapprove(p) {
+    const monthLabel = monthNames[p.period_month - 1];
+
+    const body = document.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "18px";
+
+    const message = document.createElement("p");
+    message.className = "text-sm";
+    message.textContent = `Are you sure you want to revert payroll for ${p.department_name} — ${monthLabel} ${p.period_year} back to Draft? Records will become editable again.`;
+    body.appendChild(message);
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer";
+
+    const keepBtn = document.createElement("button");
+    keepBtn.className = "btn btn-outline";
+    keepBtn.textContent = "Keep Approved";
+
+    const unapproveBtn = document.createElement("button");
+    unapproveBtn.className = "btn btn-danger";
+    unapproveBtn.textContent = "Unapprove";
+
+    footer.appendChild(keepBtn);
+    footer.appendChild(unapproveBtn);
+    body.appendChild(footer);
+
+    const { close } = openModal({ title: "Unapprove Payroll Period", body });
+    keepBtn.addEventListener("click", close);
+
+    unapproveBtn.addEventListener("click", async () => {
+      unapproveBtn.disabled = true;
+      try {
+        await unapprovePayrollPeriodRequest(p.period_id);
+        close();
+        showToast("Payroll period reverted to Draft.", "success");
+        await loadPeriods(filterDept.value);
+      } catch (err) {
+        showToast(err.message || "Could not unapprove period.", "error");
+        unapproveBtn.disabled = false;
+      }
+    });
   }
 
   // ── Preview modal ─────────────────────────────────
