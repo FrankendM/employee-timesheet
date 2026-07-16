@@ -132,19 +132,19 @@ function renderAdminPayroll(db, account, onDbChange) {
     });
   });
 
-  function renderTable() {
+  async function renderTable() {
     tableWrap.innerHTML = "";
     // Apply client-side year/month/status filters
     const yearVal   = filterYear.value   ? parseInt(filterYear.value)   : null;
     const monthVal  = filterMonth.value  ? parseInt(filterMonth.value)  : null;
     const statusVal = filterStatus.value || null;
 
-    const visible = periods.filter(p => {
-      if (yearVal   && p.period_year  !== yearVal)   return false;
-      if (monthVal  && p.period_month !== monthVal)  return false;
-      if (statusVal && p.status       !== statusVal) return false;
-      return true;
-    });
+    const periodParams = new URLSearchParams();
+    if (filterDept.value) periodParams.set('department_id', filterDept.value);
+    if (yearVal)          periodParams.set('year',          yearVal);
+    if (monthVal)         periodParams.set('month',         monthVal);
+    if (statusVal)        periodParams.set('status',        statusVal);
+    const visible = await fetchPayrollPeriods(null, periodParams.toString());
 
     const rows = visible.map(p => {
       const statusColor = p.status === "Approved" ? "#16a34a" : "#d97706";
@@ -215,7 +215,7 @@ function renderAdminPayroll(db, account, onDbChange) {
   }
 
   // ── Approve confirmation modal ────────────────────
-  function confirmApprove(p) {
+  async function confirmApprove(p) {
     const monthLabel = monthNames[p.period_month - 1];
 
     const body = document.createElement("div");
@@ -261,7 +261,7 @@ function renderAdminPayroll(db, account, onDbChange) {
   }
 
   // ── Unapprove confirmation modal ──────────────────
-  function confirmUnapprove(p) {
+  async function confirmUnapprove(p) {
     const monthLabel = monthNames[p.period_month - 1];
 
     const body = document.createElement("div");
@@ -559,7 +559,7 @@ function renderAdminPayroll(db, account, onDbChange) {
 // ═════════════════════════════════════════════════════
 // EMPLOYEE: MY PAY HISTORY (TSK-39)
 // ═════════════════════════════════════════════════════
-function renderMyPayHistory(db, account) {
+async function renderMyPayHistory(db, account) {
   const page = document.createElement("div");
   page.className = "page";
 

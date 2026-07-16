@@ -39,17 +39,13 @@ function renderAccounts(db, onDbChange) {
     page.appendChild(card);
   }
 
-  function renderTable(card) {
+  async function renderTable(card) {
     const old = card.querySelector(".table-wrap, .table-empty-wrap");
     if (old) old.remove();
 
-    const filtered = db.accounts.filter(a => {
-      const name = a.full_name || "";
-      return (
-        a.username.toLowerCase().includes(searchVal.toLowerCase()) ||
-        name.toLowerCase().includes(searchVal.toLowerCase())
-      );
-    });
+    const acctParams = new URLSearchParams();
+    if (searchVal) acctParams.set('search', searchVal);
+    const filtered = await apiRequest(`/accounts.php?${acctParams.toString()}`);
 
     const rows = filtered.map(a => {
       const empCell = document.createElement("div");

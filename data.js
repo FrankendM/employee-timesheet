@@ -114,9 +114,10 @@ async function fetchDashboardStats() {
 }
 
 // ── Payroll (admin unless noted) ─────────────────────
-async function fetchPayrollPeriods(departmentId = null) {
+async function fetchPayrollPeriods(departmentId = null, extraParams = "") {
   const qs = departmentId ? `&department_id=${departmentId}` : "";
-  return apiRequest(`/payroll.php?action=periods${qs}`);
+  const extra = extraParams ? `&${extraParams}` : "";
+  return apiRequest(`/payroll.php?action=periods${qs}${extra}`);
 }
 async function previewPayrollRequest(departmentId, year, month) {
   return apiRequest(

@@ -105,14 +105,13 @@ function renderDepartments(db, onDbChange) {
     });
   }
 
-  function renderTable(card) {
+  async function renderTable(card) {
     const old = card.querySelector(".table-wrap, .table-empty-wrap");
     if (old) old.remove();
 
-    const filtered = db.departments.filter(d =>
-      d.department_name.toLowerCase().includes(searchVal.toLowerCase()) ||
-      (d.department_code || "").toLowerCase().includes(searchVal.toLowerCase())
-    );
+    const deptParams = new URLSearchParams();
+    if (searchVal) deptParams.set('search', searchVal);
+    const filtered = await apiRequest(`/departments.php?${deptParams.toString()}`);
 
     // Summary strip
     const totalEmployees  = filtered.reduce((s, d) => s + (d.employee_count || 0), 0);
