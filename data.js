@@ -37,7 +37,7 @@ async function logoutRequest() {
 async function fetchAllData() {
   const safe = (p) => p.catch(() => []);
 
-  const [employees, departments, roles, shiftCategories, attendanceStatuses, leaveRecords, accounts, timeLogs, dashboardStats] =
+  const [employees, departments, roles, shiftCategories, attendanceStatuses, leaveRecords, accounts, timeLogs, dashboardStats, leaveTypes] =
     await Promise.all([
       apiRequest("/employees.php"),
       apiRequest("/departments.php"),
@@ -48,6 +48,7 @@ async function fetchAllData() {
       safe(apiRequest("/accounts.php")), // admin only
       safe(apiRequest("/time_logs.php")),
       safe(apiRequest("/dashboard.php")),
+      safe(apiRequest("/leave_types.php")),
     ]);
 
   return {
@@ -60,6 +61,7 @@ async function fetchAllData() {
     leaveRecords,
     accounts,
     dashboardStats,
+    leaveTypes,
   };
 }
 
@@ -106,9 +108,6 @@ async function updateTimeLogRequest(logId, data) {
 }
 
 // ── Dashboard ─────────────────────────────────────────
-// Server-computed summary stats (headcount, attendance, dept breakdown,
-// recent clock-ins for admin; personal clock/leave summary for employee).
-// Shape documented in backend/routes/dashboard.php.
 async function fetchDashboardStats() {
   return apiRequest("/dashboard.php");
 }
@@ -149,15 +148,11 @@ async function unapprovePayrollPeriodRequest(periodId) {
     method: "POST",
   });
 }
-// Employee: own approved pay history
 async function fetchMyPayrollHistory() {
   return apiRequest("/payroll.php?action=my_history");
 }
 
 // ── Audit Log (admin only, read-only) ─────────────────
-// Backend: backend/routes/audit_log.php
-// Tracks: account_create, account_update, account_delete,
-//         payroll_approve, payroll_unapprove
 function buildAuditLogQS(filters = {}) {
   const params = [];
   if (filters.action)      params.push(`action=${encodeURIComponent(filters.action)}`);
@@ -179,7 +174,6 @@ function buildReportQS({ departmentId, year, month }) {
   const params = [];
   if (departmentId) params.push(`department_id=${departmentId}`);
   if (year && month) {
-    // Build a full month range so the backend date_from/date_to params are satisfied
     const pad = (n) => String(n).padStart(2, "0");
     const lastDay = new Date(year, month, 0).getDate();
     params.push(`date_from=${year}-${pad(month)}-01`);
@@ -201,6 +195,20 @@ async function fetchEmployeeEarningsReport(filters = {}) {
   return apiRequest(`/reports.php?action=employee_earnings${qs}`);
 }
 
+// ── Leave Types ───────────────────────────────────────
+async function fetchLeaveTypes() {
+  return apiRequest("/leave_types.php");
+}
+async function createLeaveType(body) {
+  return apiRequest("/leave_types.php", { method: "POST", body: JSON.stringify(body) });
+}
+async function updateLeaveType(body) {
+  return apiRequest("/leave_types.php", { method: "PUT", body: JSON.stringify(body) });
+}
+async function deleteLeaveType(body) {
+  return apiRequest("/leave_types.php", { method: "DELETE", body: JSON.stringify(body) });
+}
+
 // ── Empty shape ───────────────────────────────────────
 function emptyDb() {
   return {
@@ -208,5 +216,6 @@ function emptyDb() {
     shiftCategories: [], attendanceStatuses: [],
     timeLogs: [], leaveRecords: [], accounts: [],
     dashboardStats: null,
+    leaveTypes: [],
   };
 }

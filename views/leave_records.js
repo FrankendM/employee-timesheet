@@ -445,6 +445,17 @@ function renderLeaveRecords(db, account, onDbChange) {
     body.style.flexDirection = "column";
     body.style.gap = "14px";
 
+    // Leave types from database instead of hardcoded
+    const leaveTypeOptions = (db.leaveTypes && db.leaveTypes.length)
+      ? db.leaveTypes.map(t => [t.leave_name, t.leave_name])
+      : [
+          ["Sick Leave",      "Sick Leave"],
+          ["Vacation Leave",  "Vacation Leave"],
+          ["Emergency Leave", "Emergency Leave"],
+          ["Maternity Leave", "Maternity Leave"],
+          ["Paternity Leave", "Paternity Leave"],
+          ["Unpaid Leave",    "Unpaid Leave"],
+        ];
     const leaveTypes = [
       ["Sick Leave",       "Sick Leave"],
       ["Vacation Leave",   "Vacation Leave"],
@@ -454,7 +465,7 @@ function renderLeaveRecords(db, account, onDbChange) {
       ["Unpaid Leave",     "Unpaid Leave"],
     ];
 
-    const fType    = makeSelect(leaveTypes, data.leave_type || "Sick Leave");
+    const fType    = makeSelect(leaveTypeOptions, data.leave_type || (leaveTypeOptions[0] && leaveTypeOptions[0][0]) || "");
     const fFrom    = makeInput("date", data.date_from);
     const fTo      = makeInput("date", data.date_to);
     const fRemarks = makeInput("text", data.remarks, "Optional remarks…");
