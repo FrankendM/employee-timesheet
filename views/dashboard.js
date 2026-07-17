@@ -6,7 +6,11 @@ function renderDashboard(db, account) {
   const page = document.createElement("div");
   page.className = "page";
 
-  const isAdmin = account && account.access_level === "admin";
+  // Valid access_level values: system_admin, payroll_admin, supervisor, employee.
+  // dashboard.php already returns the company-wide (or dept-scoped, for
+  // supervisor) admin-style payload for all three of these — "admin" alone
+  // is never a real access_level value.
+  const isAdmin = account && ["system_admin", "payroll_admin", "supervisor"].includes(account.access_level);
   const stats   = db.dashboardStats;
 
   if (isAdmin) {

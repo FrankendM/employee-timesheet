@@ -6,7 +6,12 @@ function renderLeaveRecords(db, account, onDbChange) {
   const page = document.createElement("div");
   page.className = "page";
 
-  const isAdmin = account.access_level === "admin";
+  // Valid access_level values: system_admin, payroll_admin, supervisor, employee.
+  // Privileged = sees all/dept records + approve/reject (system_admin, payroll_admin, supervisor —
+  // matches leave_records.php PUT, which allows all three, minus approving one's own request).
+  // Full admin = can also hard-delete any record (system_admin, payroll_admin only, per DELETE route).
+  const isAdmin      = ["system_admin", "payroll_admin", "supervisor"].includes(account.access_level);
+  const isFullAdmin  = ["system_admin", "payroll_admin"].includes(account.access_level);
   let searchVal = "";
   let filterStatus = "";
 
@@ -38,9 +43,10 @@ function renderLeaveRecords(db, account, onDbChange) {
       actionEl.appendChild(fileBtn);
     }
 
-    const myLeaves = isAdmin
-      ? db.leaveRecords
-      : db.leaveRecords.filter(l => l.employee_id === account.employee_id);
+    // db.leaveRecords already comes back role-scoped from the backend
+    // (all records / own department / own records only) — no need to
+    // re-filter by employee_id here.
+    const myLeaves = db.leaveRecords;
 
     page.appendChild(pageHeader(
       "Leave Records",
@@ -94,10 +100,6 @@ function renderLeaveRecords(db, account, onDbChange) {
     const old = card.querySelector(".table-wrap, .table-empty-wrap");
     if (old) old.remove();
 
-    const source = isAdmin
-      ? db.leaveRecords
-      : db.leaveRecords.filter(l => l.employee_id === account.employee_id);
-
     // Backend filtering — search and status sent as query params
     const leaveParams = new URLSearchParams();
     if (searchVal)    leaveParams.set('search', searchVal);
@@ -120,8 +122,9 @@ function renderLeaveRecords(db, account, onDbChange) {
         viewBtn.addEventListener("click", () => openLeaveDetailsModal(l));
         actions.appendChild(viewBtn);
 
-        // Approve button
-        if (l.leave_status === "Pending") {
+        // Approve/Reject — backend blocks a supervisor approving their own request
+        const isOwnAsSupervisor = account.access_level === "supervisor" && l.employee_id === account.employee_id;
+        if (l.leave_status === "Pending" && !isOwnAsSupervisor) {
           const approveBtn = document.createElement("button");
           approveBtn.className = "btn btn-ghost btn-sm";
           approveBtn.style.color = "var(--emerald, #10b981)";
@@ -137,12 +140,14 @@ function renderLeaveRecords(db, account, onDbChange) {
           actions.appendChild(rejectBtn);
         }
 
-        const delBtn = document.createElement("button");
-        delBtn.className = "btn btn-ghost btn-sm";
-        delBtn.style.color = "var(--red, #ef4444)";
-        delBtn.textContent = "Delete";
-        delBtn.addEventListener("click", () => deleteLeave(l));
-        actions.appendChild(delBtn);
+        if (isFullAdmin) {
+          const delBtn = document.createElement("button");
+          delBtn.className = "btn btn-ghost btn-sm";
+          delBtn.style.color = "var(--red, #ef4444)";
+          delBtn.textContent = "Delete";
+          delBtn.addEventListener("click", () => deleteLeave(l));
+          actions.appendChild(delBtn);
+        }
 
       } else {
         // Employee: edit/cancel only if pending
