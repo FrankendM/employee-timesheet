@@ -4,10 +4,22 @@
 // TSK-28: Edit Employee Form
 // TSK-34: Deactivate/Reactivate Employee
 // TSK-42: Filter Employees by Department
+//
+// Backend permissions (employees.php):
+//   GET    — system_admin & payroll_admin see everyone; supervisor sees only
+//            their own department (server ignores search/department_id
+//            filters for supervisors and always returns the dept-scoped set)
+//   POST   — payroll_admin or system_admin only (requirePayrollAdmin)
+//   PUT    — payroll_admin or system_admin only (requirePayrollAdmin)
+//   DELETE — system_admin only (not exposed in this UI at all)
 
-function renderEmployees(db, onDbChange) {
+function renderEmployees(db, account, onDbChange) {
   const page = document.createElement("div");
   page.className = "page";
+
+  const level = account ? account.access_level : null;
+  const canWrite = level === "system_admin" || level === "payroll_admin"; // create/edit/deactivate
+  const isSupervisor = level === "supervisor";
 
   let searchVal    = "";
   let filterDeptId = ""; // "" = all departments
@@ -19,47 +31,66 @@ function renderEmployees(db, onDbChange) {
 
   function render() {
     // Header
-    const addBtn = document.createElement("button");
-    addBtn.className = "btn btn-primary";
-    addBtn.innerHTML = `${icons.plus} Add Employee`;
-    addBtn.addEventListener("click", () => openEmployeeModal(null));
-    page.appendChild(pageHeader("Employees", `${db.employees.length} total`, addBtn));
+    let addBtn = null;
+    if (canWrite) {
+      addBtn = document.createElement("button");
+      addBtn.className = "btn btn-primary";
+      addBtn.innerHTML = `${icons.plus} Add Employee`;
+      addBtn.addEventListener("click", () => openEmployeeModal(null));
+    }
+    page.appendChild(pageHeader(
+      isSupervisor ? "My Department" : "Employees",
+      `${db.employees.length} total`,
+      addBtn
+    ));
 
     // Card
     const card = document.createElement("div");
     card.className = "card";
 
-    // ── Toolbar: search + department filter ──────────
-    const toolbar = document.createElement("div");
-    toolbar.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:4px";
+    if (isSupervisor) {
+      // The backend always scopes supervisors to their own department and
+      // ignores search/department_id filters, so don't show controls that
+      // would imply they can search or filter beyond that.
+      const note = document.createElement("div");
+      note.className = "text-xs text-gray";
+      note.style.marginBottom = "10px";
+      note.textContent = "Showing employees in your department.";
+      card.appendChild(note);
+    } else {
+      // ── Toolbar: search + department filter ──────────
+      const toolbar = document.createElement("div");
+      toolbar.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:4px";
 
-    // Search
-    const searchBar = document.createElement("div");
-    searchBar.className = "search-bar";
-    searchBar.style.flex = "1";
-    searchBar.innerHTML = `${icons.search}`;
-    const searchInput = document.createElement("input");
-    searchInput.type = "text";
-    searchInput.placeholder = "Search by name or email…";
-    searchInput.value = searchVal;
-    searchInput.addEventListener("input", e => {
-      searchVal = e.target.value;
-      renderTable(card);
-    });
-    searchBar.appendChild(searchInput);
-    toolbar.appendChild(searchBar);
+      // Search
+      const searchBar = document.createElement("div");
+      searchBar.className = "search-bar";
+      searchBar.style.flex = "1";
+      searchBar.innerHTML = `${icons.search}`;
+      const searchInput = document.createElement("input");
+      searchInput.type = "text";
+      searchInput.placeholder = "Search by name or email…";
+      searchInput.value = searchVal;
+      searchInput.addEventListener("input", e => {
+        searchVal = e.target.value;
+        renderTable(card);
+      });
+      searchBar.appendChild(searchInput);
+      toolbar.appendChild(searchBar);
 
-    // Department filter — TSK-42
-    const deptOpts = [["", "All Departments"], ...db.departments.map(d => [d.department_id, d.department_name])];
-    const deptFilter = makeSelect(deptOpts, filterDeptId);
-    deptFilter.style.minWidth = "160px";
-    deptFilter.addEventListener("change", e => {
-      filterDeptId = e.target.value;
-      renderTable(card);
-    });
-    toolbar.appendChild(deptFilter);
+      // Department filter — TSK-42
+      const deptOpts = [["", "All Departments"], ...db.departments.map(d => [d.department_id, d.department_name])];
+      const deptFilter = makeSelect(deptOpts, filterDeptId);
+      deptFilter.style.minWidth = "160px";
+      deptFilter.addEventListener("change", e => {
+        filterDeptId = e.target.value;
+        renderTable(card);
+      });
+      toolbar.appendChild(deptFilter);
 
-    card.appendChild(toolbar);
+      card.appendChild(toolbar);
+    }
+
     renderTable(card);
     page.appendChild(card);
   }
@@ -68,10 +99,13 @@ function renderEmployees(db, onDbChange) {
     const old = card.querySelector(".table-wrap, .table-empty-wrap");
     if (old) old.remove();
 
-    // Ask backend for filtered results
+    // Ask backend for filtered results. Supervisors are scoped server-side
+    // regardless of what we send, so we simply don't send filters for them.
     const params = new URLSearchParams();
-    if (searchVal)    params.set('search', searchVal);
-    if (filterDeptId) params.set('department_id', filterDeptId);
+    if (!isSupervisor) {
+      if (searchVal)    params.set('search', searchVal);
+      if (filterDeptId) params.set('department_id', filterDeptId);
+    }
     const filtered = await apiRequest(`/employees.php?${params.toString()}`);
 
     // Active count badge strip
@@ -112,23 +146,28 @@ function renderEmployees(db, onDbChange) {
         </div>
       `;
 
-      const editBtn = document.createElement("button");
-      editBtn.className = "btn btn-ghost btn-sm";
-      editBtn.innerHTML = `${icons.pencil} Edit`;
-      editBtn.addEventListener("click", () => openEmployeeModal(e));
+      let actionsCell = `<span class="text-xs text-gray">—</span>`;
 
-      const isActive = e.employment_status === "Active";
-      const toggleBtn = document.createElement("button");
-      toggleBtn.className = "btn btn-ghost btn-sm";
-      toggleBtn.textContent = isActive ? "Deactivate" : "Reactivate";
-      toggleBtn.style.color = isActive ? "var(--red, #ef4444)" : "var(--emerald, #10b981)";
-      toggleBtn.addEventListener("click", () => toggleEmployeeStatus(e));
+      if (canWrite) {
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn btn-ghost btn-sm";
+        editBtn.innerHTML = `${icons.pencil} Edit`;
+        editBtn.addEventListener("click", () => openEmployeeModal(e));
 
-      const actions = document.createElement("div");
-      actions.style.display = "flex";
-      actions.style.gap = "6px";
-      actions.appendChild(editBtn);
-      actions.appendChild(toggleBtn);
+        const isActive = e.employment_status === "Active";
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "btn btn-ghost btn-sm";
+        toggleBtn.textContent = isActive ? "Deactivate" : "Reactivate";
+        toggleBtn.style.color = isActive ? "var(--red, #ef4444)" : "var(--emerald, #10b981)";
+        toggleBtn.addEventListener("click", () => toggleEmployeeStatus(e));
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.gap = "6px";
+        actions.appendChild(editBtn);
+        actions.appendChild(toggleBtn);
+        actionsCell = actions;
+      }
 
       return [
         empCell,
@@ -137,7 +176,7 @@ function renderEmployees(db, onDbChange) {
         `<span class="mono text-xs">₱${Number(e.current_hourly_rate).toFixed(2)}/hr</span>`,
         badge(e.employment_status),
         `<span class="mono text-xs text-gray">${fmtDate(e.hire_date)}</span>`,
-        actions,
+        actionsCell,
       ];
     });
 
@@ -150,6 +189,8 @@ function renderEmployees(db, onDbChange) {
   }
 
   function openEmployeeModal(existing) {
+    if (!canWrite) return; // defensive — buttons that trigger this aren't rendered anyway
+
     const isEdit = !!existing;
     const blankEmp = {
       department_id: db.departments[0] ? db.departments[0].department_id : null,
@@ -264,6 +305,8 @@ function renderEmployees(db, onDbChange) {
 
   // ── Deactivate/Reactivate confirmation modal ──────────
   function toggleEmployeeStatus(emp) {
+    if (!canWrite) return; // defensive
+
     const isActive = emp.employment_status === "Active";
     const newStatus = isActive ? "Inactive" : "Active";
 

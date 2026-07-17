@@ -25,34 +25,74 @@ function renderBootScreen() {
   return wrap;
 }
 
-// ── Navigation ────────────────────────────────────────
-// Admin nav — includes Payroll, Shift Categories
-const adminNav = [
-  { id: "dashboard",        label: "Dashboard",         icon: icons.dashboard },
-  { id: "employees",        label: "Employees",         icon: icons.users     },
-  { id: "departments",      label: "Departments",       icon: icons.briefcase },
-  { id: "accounts",         label: "Accounts",          icon: icons.userPlus  },
-  { id: "leave_records",    label: "Leave Records",     icon: icons.fileText  },
-  { id: "clocked_in_now",   label: "Clocked In Now",    icon: liveIcon        },
-  { id: "my_logs",          label: "Time Logs",         icon: logsIcon        },
-  { id: "payroll",          label: "Payroll",           icon: payIcon         },
-  { id: "shift_categories", label: "Shift Categories",  icon: shiftIcon       },
-  { id: "employment_status", label: "Employment Status", icon: icons.users     },
-  { id: "work_schedules",   label: "Work Schedules",     icon: shiftIcon       },
-  { id: "employment_types", label: "Employment Types",   icon: icons.briefcase },
-  { id: "holidays",         label: "Holidays",           icon: icons.fileText  },
-  { id: "reports",          label: "Reports",            icon: icons.barChart  },
-  { id: "audit_log",        label: "Audit Log",          icon: icons.history   },
+// ── Access levels ─────────────────────────────────────
+// Mirrors middleware/helpers.php: employee, supervisor, payroll_admin, system_admin
+const LEVEL = {
+  SYSTEM_ADMIN:  "system_admin",
+  PAYROLL_ADMIN: "payroll_admin",
+  SUPERVISOR:    "supervisor",
+  EMPLOYEE:      "employee",
+};
+
+// ── Navigation, per role ────────────────────────────────
+// Each nav's items only include views that role's backend routes actually
+// allow. Button-level permissions (e.g. who can Add/Edit/Delete) are handled
+// inside the individual view files using `account.access_level`.
+
+const navSystemAdmin = [
+  { id: "dashboard",         label: "Dashboard",         icon: icons.dashboard  },
+  { id: "employees",         label: "Employees",         icon: icons.users      },
+  { id: "departments",       label: "Departments",       icon: icons.briefcase  },
+  { id: "accounts",          label: "Accounts",          icon: icons.userPlus   },
+  { id: "leave_records",     label: "Leave Records",     icon: icons.fileText   },
+  { id: "clocked_in_now",    label: "Clocked In Now",    icon: liveIcon         },
+  { id: "my_logs",           label: "Time Logs",         icon: logsIcon         },
+  { id: "payroll",           label: "Payroll",           icon: payIcon          },
+  { id: "shift_categories",  label: "Shift Categories",  icon: shiftIcon        },
+  { id: "employment_status", label: "Employment Status", icon: icons.users      },
+  { id: "work_schedules",    label: "Work Schedules",    icon: shiftIcon        },
+  { id: "employment_types",  label: "Employment Types",  icon: icons.briefcase  },
+  { id: "holidays",          label: "Holidays",          icon: icons.fileText   },
+  { id: "reports",           label: "Reports",           icon: icons.barChart   },
+  { id: "audit_log",         label: "Audit Log",         icon: icons.history    },
 ];
 
-// Employee nav — includes My Pay History
-const employeeNav = [
-  { id: "dashboard",     label: "Dashboard",    icon: icons.dashboard },
-  { id: "time_logs",     label: "Clock In / Out", icon: clockIcon     },
-  { id: "my_logs",       label: "My Time Logs", icon: logsIcon        },
-  { id: "leave_records", label: "My Leave",     icon: icons.fileText  },
-  { id: "payroll",       label: "My Pay",       icon: payIcon         },
+// payroll_admin: everything system_admin has EXCEPT Departments, Accounts,
+// and Audit Log (those routes hard-require system_admin in the backend).
+const navPayrollAdmin = navSystemAdmin.filter(
+  n => !["departments", "accounts", "audit_log"].includes(n.id)
+);
+
+// supervisor: dept-scoped Employees + their own operational views. No admin
+// configuration pages (those never accept a "supervisor" access level).
+const navSupervisor = [
+  { id: "dashboard",       label: "Dashboard",      icon: icons.dashboard },
+  { id: "employees",       label: "My Department",  icon: icons.users     },
+  { id: "clocked_in_now",  label: "Clocked In Now", icon: liveIcon        },
+  { id: "leave_records",   label: "Leave Records",  icon: icons.fileText  },
+  { id: "time_logs",       label: "Clock In / Out", icon: clockIcon       },
+  { id: "my_logs",         label: "My Time Logs",   icon: logsIcon        },
+  { id: "payroll",         label: "My Pay",         icon: payIcon         },
 ];
+
+// employee: self-service only.
+const navEmployee = [
+  { id: "dashboard",     label: "Dashboard",      icon: icons.dashboard },
+  { id: "time_logs",     label: "Clock In / Out",  icon: clockIcon      },
+  { id: "my_logs",       label: "My Time Logs",    icon: logsIcon       },
+  { id: "leave_records", label: "My Leave",        icon: icons.fileText },
+  { id: "payroll",       label: "My Pay",          icon: payIcon        },
+];
+
+function navForAccount(acc) {
+  switch (acc && acc.access_level) {
+    case LEVEL.SYSTEM_ADMIN:  return navSystemAdmin;
+    case LEVEL.PAYROLL_ADMIN: return navPayrollAdmin;
+    case LEVEL.SUPERVISOR:    return navSupervisor;
+    case LEVEL.EMPLOYEE:      return navEmployee;
+    default:                  return navEmployee; // safest fallback
+  }
+}
 
 // ── Data load ─────────────────────────────────────────
 async function loadDb() {
@@ -92,12 +132,9 @@ async function renderApp() {
     return;
   }
 
-  const isAdmin = account.access_level === "admin";
-
-  const allowedAdmin = ["dashboard", "employees", "departments", "accounts",
-                       "leave_records", "clocked_in_now", "my_logs", "payroll", "shift_categories", "employment_status", "work_schedules", "employment_types", "holidays", "reports", "audit_log"];
-  const allowedEmployee = ["dashboard", "time_logs", "my_logs", "leave_records", "payroll"];
-  const allowed = isAdmin ? allowedAdmin : allowedEmployee;
+  const level   = account.access_level;
+  const navItems = navForAccount(account);
+  const allowed  = navItems.map(n => n.id);
 
   if (!allowed.includes(activeView)) activeView = "dashboard";
 
@@ -109,7 +146,7 @@ async function renderApp() {
   layout.className = "layout";
 
   const sidebar = buildSidebar({
-    navItems: isAdmin ? adminNav : employeeNav,
+    navItems,
     activeId: activeView,
     onNav: (id) => {
       if (!allowed.includes(id)) return;
@@ -131,22 +168,39 @@ async function renderApp() {
 
   const dbChangeHandler = (updated) => { db = updated; };
 
+  // System Admin / Payroll Admin — full admin-side config pages.
+  // These backend routes never accept "supervisor" or "employee".
+  const isAdminConfigLevel = level === LEVEL.SYSTEM_ADMIN || level === LEVEL.PAYROLL_ADMIN;
+
   let view;
   switch (activeView) {
     case "employees":
-      view = isAdmin ? renderEmployees(db, dbChangeHandler) : renderDashboard(db, account);
+      // employees.php GET allows system_admin/payroll_admin/supervisor
+      // (each scoped differently server-side). renderEmployees uses
+      // `account` to decide which buttons (Add/Edit/Deactivate) to show.
+      view = allowed.includes("employees")
+        ? renderEmployees(db, account, dbChangeHandler)
+        : renderDashboard(db, account);
       break;
     case "departments":
-      view = isAdmin ? renderDepartments(db, dbChangeHandler) : renderDashboard(db, account);
+      // departments.php write ops are system_admin only.
+      view = level === LEVEL.SYSTEM_ADMIN
+        ? renderDepartments(db, account, dbChangeHandler)
+        : renderDashboard(db, account);
       break;
     case "accounts":
-      view = isAdmin ? renderAccounts(db, dbChangeHandler) : renderDashboard(db, account);
+      // accounts.php is system_admin only, full stop.
+      view = level === LEVEL.SYSTEM_ADMIN
+        ? renderAccounts(db, dbChangeHandler)
+        : renderDashboard(db, account);
       break;
     case "leave_records":
       view = renderLeaveRecords(db, account, dbChangeHandler);
       break;
     case "clocked_in_now":
-      view = isAdmin ? renderClockedInNow(db, account, dbChangeHandler) : renderDashboard(db, account);
+      view = allowed.includes("clocked_in_now")
+        ? renderClockedInNow(db, account, dbChangeHandler)
+        : renderDashboard(db, account);
       break;
     case "time_logs":
       view = renderTimeLogs(db, account, dbChangeHandler);
@@ -158,25 +212,28 @@ async function renderApp() {
       view = renderPayroll(db, account, dbChangeHandler);
       break;
     case "shift_categories":
-      view = isAdmin ? renderShiftCategories(db, dbChangeHandler) : renderDashboard(db, account);
+      view = isAdminConfigLevel ? renderShiftCategories(db, dbChangeHandler) : renderDashboard(db, account);
       break;
     case "employment_status":
-      view = isAdmin ? renderEmploymentStatus(db, dbChangeHandler) : renderDashboard(db, account);
+      view = isAdminConfigLevel ? renderEmploymentStatus(db, dbChangeHandler) : renderDashboard(db, account);
       break;
     case "work_schedules":
-      view = isAdmin ? renderWorkSchedules(db, dbChangeHandler) : renderDashboard(db, account);
+      view = isAdminConfigLevel ? renderWorkSchedules(db, dbChangeHandler) : renderDashboard(db, account);
       break;
     case "employment_types":
-      view = isAdmin ? renderEmploymentTypes(db, dbChangeHandler) : renderDashboard(db, account);
+      view = isAdminConfigLevel ? renderEmploymentTypes(db, dbChangeHandler) : renderDashboard(db, account);
       break;
     case "holidays":
-      view = isAdmin ? renderHolidays(db, dbChangeHandler) : renderDashboard(db, account);
-      break;  
+      view = isAdminConfigLevel ? renderHolidays(db, dbChangeHandler) : renderDashboard(db, account);
+      break;
     case "reports":
-      view = isAdmin ? renderReports(db, dbChangeHandler) : renderDashboard(db, account);
+      view = isAdminConfigLevel ? renderReports(db, dbChangeHandler) : renderDashboard(db, account);
       break;
     case "audit_log":
-      view = isAdmin ? renderAuditLog(db, dbChangeHandler) : renderDashboard(db, account);
+      // audit_log.php is system_admin only, full stop.
+      view = level === LEVEL.SYSTEM_ADMIN
+        ? renderAuditLog(db, dbChangeHandler)
+        : renderDashboard(db, account);
       break;
     default:
       view = renderDashboard(db, account);
@@ -190,8 +247,6 @@ async function renderApp() {
 
 // ── Change Password Modal ─────────────────────────────
 // Self-service: any logged-in user can change their own password.
-// Add this function to app.js (outside renderApp), then call it
-// from the sidebar Change Password button.
 
 function openChangePasswordModal() {
   const body = document.createElement("div");

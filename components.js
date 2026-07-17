@@ -93,7 +93,7 @@ function buildSidebar({ navItems, activeId, onNav, account, emp, onLogout }) {
         ${avatarHTML(displayName, "sm")}
         <div style="min-width:0">
           <div class="sidebar-user-name">${displayName}</div>
-          <div class="sidebar-user-role">${account.access_level}</div>
+          <div class="sidebar-user-role">${roleLabel(account.access_level)}</div>
         </div>
       </div>
       <button class="logout-btn" id="change-pw-btn" style="margin-bottom:6px">${icons.key} Change Password</button>

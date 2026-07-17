@@ -1,7 +1,19 @@
-// ── Departments view (admin only) ─────────────────────
-function renderDepartments(db, onDbChange) {
+// ── Departments view ───────────────────────────────────
+// Backend permissions (departments.php):
+//   GET    — any authenticated user (requireAuth)
+//   POST   — system_admin only (requireSystemAdmin)
+//   PUT    — system_admin only (requireSystemAdmin)
+//   DELETE — system_admin only (requireSystemAdmin)
+//
+// This view is only reachable via the nav for system_admin (see app.js),
+// but we still gate the write controls on `account` here defensively in
+// case this function is ever called from elsewhere.
+
+function renderDepartments(db, account, onDbChange) {
   const page = document.createElement("div");
   page.className = "page";
+
+  const canManage = account && account.access_level === "system_admin";
 
   let searchVal   = "";
   let deptSalaries = {}; // department_id → total net_pay from latest approved period
@@ -61,10 +73,13 @@ function renderDepartments(db, onDbChange) {
   }
 
   function render() {
-    const addBtn = document.createElement("button");
-    addBtn.className = "btn btn-primary";
-    addBtn.innerHTML = `${icons.plus} Add Department`;
-    addBtn.addEventListener("click", () => openDepartmentModal(null));
+    let addBtn = null;
+    if (canManage) {
+      addBtn = document.createElement("button");
+      addBtn.className = "btn btn-primary";
+      addBtn.innerHTML = `${icons.plus} Add Department`;
+      addBtn.addEventListener("click", () => openDepartmentModal(null));
+    }
 
     page.appendChild(pageHeader(
       "Departments",
@@ -161,17 +176,21 @@ function renderDepartments(db, onDbChange) {
         salaryCell = `<span class="text-xs text-gray">—</span>`;
       }
 
-      const editBtn = document.createElement("button");
-      editBtn.className = "btn btn-ghost btn-sm";
-      editBtn.innerHTML = `${icons.pencil} Edit`;
-      editBtn.addEventListener("click", () => openDepartmentModal(d));
+      let actionsCell = `<span class="text-xs text-gray">—</span>`;
+      if (canManage) {
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn btn-ghost btn-sm";
+        editBtn.innerHTML = `${icons.pencil} Edit`;
+        editBtn.addEventListener("click", () => openDepartmentModal(d));
+        actionsCell = editBtn;
+      }
 
       return [
         `<span class="font-medium text-sm">${d.department_name}</span>`,
         `<span class="mono text-xs">${d.department_code || "—"}</span>`,
         `<span class="text-sm">${d.employee_count || 0}</span>`,
         salaryCell,
-        editBtn,
+        actionsCell,
       ];
     });
 
@@ -185,6 +204,8 @@ function renderDepartments(db, onDbChange) {
 
   // ── Add / Edit modal ──────────────────────────────
   function openDepartmentModal(existing) {
+    if (!canManage) return; // defensive — buttons that trigger this aren't rendered anyway
+
     const isEdit = !!existing;
     const data = isEdit ? { ...existing } : {
       department_name: "",

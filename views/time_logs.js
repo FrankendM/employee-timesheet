@@ -21,10 +21,14 @@ function renderClockInOut(db, account, onDbChange) {
   const page = document.createElement("div");
   page.className = "page";
 
-  const isAdmin = account && account.access_level === "admin";
-  const empId   = account ? account.employee_id : null;
+  const level = account ? account.access_level : null;
+  // system_admin and payroll_admin are pure HR/admin roles that never clock
+  // in. Supervisors do clock in themselves (time_logs.php's clock_in/
+  // clock_out actions just require a linked employee_id, same as employees).
+  const isPureAdmin = level === "system_admin" || level === "payroll_admin";
+  const empId = account ? account.employee_id : null;
 
-  if (isAdmin) {
+  if (isPureAdmin) {
     // Admins don't clock in — show a simple redirect message
     page.appendChild(pageHeader("Clock In / Out", "Admin accounts do not clock in"));
     const info = document.createElement("div");
@@ -432,19 +436,35 @@ function renderLogsView(db, account, onDbChange) {
   const page = document.createElement("div");
   page.className = "page";
 
-  const isAdmin = account && account.access_level === "admin";
+  const level = account ? account.access_level : null;
+  // time_logs.php GET: system_admin/payroll_admin see all logs and can
+  // filter by department+employee+search; supervisor is auto-scoped to
+  // their own department server-side but can still filter by employee and
+  // search within it; a plain employee only ever sees their own logs
+  // (backend "else" branch ignores department_id/employee_id/search for
+  // that tier — only year/month apply).
+  const isCompanyWide = level === "system_admin" || level === "payroll_admin";
+  const isDeptScoped  = level === "supervisor";
+  // PUT (editing a log) requires requirePayrollAdmin() — system_admin or
+  // payroll_admin only. Supervisors can view but not edit.
+  const canEdit = isCompanyWide;
   const empId   = account ? account.employee_id : null;
 
   page.appendChild(pageHeader(
-    isAdmin ? "Time Logs" : "My Time Logs",
-    isAdmin ? "All employee attendance records" : "Your attendance history"
+    isCompanyWide ? "Time Logs" : isDeptScoped ? "Department Time Logs" : "My Time Logs",
+    isCompanyWide ? "All employee attendance records"
+      : isDeptScoped ? "Attendance records for your department"
+      : "Your attendance history"
   ));
 
   // ── Filter bar ───────────────────────────────────────
   const filterBar = document.createElement("div");
   filterBar.style.cssText = "display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center";
 
-  const baseSource = isAdmin
+  // db.timeLogs is already department-scoped server-side for a supervisor
+  // (and self-scoped for a plain employee), so only a plain employee needs
+  // an extra client-side filter here.
+  const baseSource = (isCompanyWide || isDeptScoped)
     ? db.timeLogs
     : db.timeLogs.filter(l => l.employee_id === empId);
 
@@ -471,17 +491,23 @@ function renderLogsView(db, account, onDbChange) {
   let selectedEmployee = "all";
   let searchTerm = "";
 
-  if (isAdmin) {
-    const deptOptions = [["all", "All Departments"], ...db.departments.map(d => [String(d.department_id), d.department_name])];
-    const deptSel = makeSelect(deptOptions, selectedDept);
-    deptSel.style.width = "200px";
-    filterBar.appendChild(deptSel);
+  if (isCompanyWide || isDeptScoped) {
+    let deptSel = null;
 
-    // Employee dropdown — options narrow to whichever department is selected
+    if (isCompanyWide) {
+      const deptOptions = [["all", "All Departments"], ...db.departments.map(d => [String(d.department_id), d.department_name])];
+      deptSel = makeSelect(deptOptions, selectedDept);
+      deptSel.style.width = "200px";
+      filterBar.appendChild(deptSel);
+    }
+
+    // Employee dropdown — for company-wide roles, options narrow to
+    // whichever department is selected. For a supervisor, db.employees is
+    // already scoped to their own department, so no extra filtering needed.
     const empOptionsAll = () => {
-      const emps = selectedDept === "all"
-        ? db.employees
-        : db.employees.filter(e => String(e.department_id) === selectedDept);
+      const emps = (isCompanyWide && selectedDept !== "all")
+        ? db.employees.filter(e => String(e.department_id) === selectedDept)
+        : db.employees;
       return [["all", "All Employees"], ...emps
         .slice()
         .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""))
@@ -492,17 +518,19 @@ function renderLogsView(db, account, onDbChange) {
     empSel.addEventListener("change", () => { selectedEmployee = empSel.value; renderLogsTable(); });
     filterBar.appendChild(empSel);
 
-    deptSel.addEventListener("change", () => {
-      selectedDept = deptSel.value;
-      // Reset + rebuild employee options whenever department changes
-      selectedEmployee = "all";
-      const freshEmpSel = makeSelect(empOptionsAll(), selectedEmployee);
-      freshEmpSel.style.width = "200px";
-      freshEmpSel.addEventListener("change", () => { selectedEmployee = freshEmpSel.value; renderLogsTable(); });
-      empSel.replaceWith(freshEmpSel);
-      empSel = freshEmpSel;
-      renderLogsTable();
-    });
+    if (isCompanyWide) {
+      deptSel.addEventListener("change", () => {
+        selectedDept = deptSel.value;
+        // Reset + rebuild employee options whenever department changes
+        selectedEmployee = "all";
+        const freshEmpSel = makeSelect(empOptionsAll(), selectedEmployee);
+        freshEmpSel.style.width = "200px";
+        freshEmpSel.addEventListener("change", () => { selectedEmployee = freshEmpSel.value; renderLogsTable(); });
+        empSel.replaceWith(freshEmpSel);
+        empSel = freshEmpSel;
+        renderLogsTable();
+      });
+    }
 
     const searchWrap = document.createElement("div");
     searchWrap.style.cssText = "position:relative;flex:1;min-width:200px;max-width:280px";
@@ -526,10 +554,11 @@ function renderLogsView(db, account, onDbChange) {
     const p = new URLSearchParams();
     if (selectedYear  !== "all") p.set('year',        selectedYear);
     if (selectedMonth !== "all") p.set('month',       selectedMonth);
-    if (isAdmin && selectedDept     !== "all") p.set('department_id', selectedDept);
-    if (isAdmin && selectedEmployee !== "all") p.set('employee_id',   selectedEmployee);
-    if (isAdmin && searchTerm)                 p.set('search',        searchTerm);
-    if (!isAdmin && empId) p.set('employee_id', String(empId));
+    if (isCompanyWide && selectedDept !== "all") p.set('department_id', selectedDept);
+    if ((isCompanyWide || isDeptScoped) && selectedEmployee !== "all") p.set('employee_id', selectedEmployee);
+    if ((isCompanyWide || isDeptScoped) && searchTerm)                 p.set('search',       searchTerm);
+    // A plain employee is always scoped to their own logs server-side —
+    // time_logs.php's "else" branch ignores employee_id/search for that tier.
     return await apiRequest(`/time_logs.php?${p.toString()}`);
   }
 
@@ -574,8 +603,11 @@ function renderLogsView(db, account, onDbChange) {
     });
 
     // Table
-    const headers = isAdmin
-      ? ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Shift", "Status", ""]
+    const showEmployeeCol = isCompanyWide || isDeptScoped;
+    const headers = showEmployeeCol
+      ? (canEdit
+          ? ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Shift", "Status", ""]
+          : ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Shift", "Status"])
       : ["Date", "Clock In", "Clock Out", "Hours", "Shift", "Status"];
 
     const rows = filtered.map(l => {
@@ -586,24 +618,28 @@ function renderLogsView(db, account, onDbChange) {
       const shiftStr    = `<span style="font-size:0.78rem">${l.category_name || "—"}</span>`;
       const statusBadge = l.status_label ? badge(l.status_label) : "—";
 
-      if (isAdmin) {
-        const actCell = document.createElement("div");
-        actCell.style.display = "flex";
-        const editBtn = document.createElement("button");
-        editBtn.className = "btn btn-ghost btn-sm";
-        editBtn.innerHTML = `${icons.pencil} Edit`;
-        editBtn.addEventListener("click", () => openEditModal(l, db, (updated) => {
-          db = { ...db, timeLogs: db.timeLogs.map(x => x.log_id === updated.log_id ? updated : x) };
-          onDbChange(db);
-          renderLogsTable();
-        }));
-        actCell.appendChild(editBtn);
-
+      if (showEmployeeCol) {
         const empCell = document.createElement("div");
         empCell.className = "emp-cell";
         empCell.innerHTML = `${avatarHTML(l.full_name || "?", "sm")}<span style="margin-left:6px;font-size:0.85rem">${l.full_name || "?"}</span>`;
 
-        return [empCell, dateStr, clockInStr, clockOutStr, hoursStr, shiftStr, statusBadge, actCell];
+        if (canEdit) {
+          const actCell = document.createElement("div");
+          actCell.style.display = "flex";
+          const editBtn = document.createElement("button");
+          editBtn.className = "btn btn-ghost btn-sm";
+          editBtn.innerHTML = `${icons.pencil} Edit`;
+          editBtn.addEventListener("click", () => openEditModal(l, db, (updated) => {
+            db = { ...db, timeLogs: db.timeLogs.map(x => x.log_id === updated.log_id ? updated : x) };
+            onDbChange(db);
+            renderLogsTable();
+          }));
+          actCell.appendChild(editBtn);
+
+          return [empCell, dateStr, clockInStr, clockOutStr, hoursStr, shiftStr, statusBadge, actCell];
+        }
+
+        return [empCell, dateStr, clockInStr, clockOutStr, hoursStr, shiftStr, statusBadge];
       }
 
       return [dateStr, clockInStr, clockOutStr, hoursStr, shiftStr, statusBadge];
