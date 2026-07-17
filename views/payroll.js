@@ -1,5 +1,12 @@
 function renderPayroll(db, account, onDbChange) {
-  return account.access_level === "admin"
+  // payroll.php: periods/preview/records/generate/record/approve/unapprove
+  // all require requirePayrollAdmin() — system_admin or payroll_admin only.
+  // my_history just requires an authenticated account with a linked
+  // employee_id, so supervisor and employee both land there.
+  const level = account && account.access_level;
+  const isPayrollAdmin = level === "system_admin" || level === "payroll_admin";
+
+  return isPayrollAdmin
     ? renderAdminPayroll(db, account, onDbChange)
     : renderMyPayHistory(db, account);
 }

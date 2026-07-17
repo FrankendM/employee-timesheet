@@ -161,7 +161,7 @@ function renderAccounts(db, onDbChange) {
     const fUser = makeInput("text", data.username, "username");
     const fEmail = makeInput("email", data.email, "email@corp.ph");
     const fPw = makeInput("password", "", "password");
-    const fAccess = makeSelect([["admin", "Admin"], ["employee", "Employee"]], data.access_level);
+    const fAccess = makeSelect([["system_admin", "System Admin"], ["employee", "Employee"],["payroll_admin", "Payroll Admin"],["supervisor", "Supervisor"]], data.access_level);
 
     body.appendChild(buildField("Linked Employee (optional)", fEmp));
     body.appendChild(buildField("Username", fUser));

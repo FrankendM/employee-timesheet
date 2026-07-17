@@ -92,7 +92,7 @@ function renderAuditLog(db, onDbChange) {
   toInp.addEventListener("change", e => { filterTo = e.target.value; offset = 0; load(); });
 
   const accOpts = [["", "All Admins"], ...db.accounts
-    .filter(a => a.access_level === "admin")
+    .filter(a => a.access_level !== "employee")
     .map(a => [a.account_id, a.username])];
   const accSel = makeSelect(accOpts, filterAccId);
   accSel.addEventListener("change", e => { filterAccId = e.target.value; offset = 0; load(); });
