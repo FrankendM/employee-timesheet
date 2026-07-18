@@ -37,7 +37,10 @@ const SYSTEM_ADMIN_NAV = [
     items: [
       { id: "employees",      label: "Employees",      icon: icons.users    },
       { id: "leave_records",  label: "Leave Records",  icon: icons.fileText },
+      { id: "leave_balances", label: "Leave Balances", icon: icons.fileText },
       { id: "time_log_claims", label: "OT Claims",     icon: icons.fileText },
+      { id: "employment_history", label: "Employment History", icon: icons.history },
+      { id: "employee_exits", label: "Employee Exits", icon: icons.users },
       { id: "clocked_in_now", label: "Clocked In Now", icon: icons.live     },
       { id: "my_logs",        label: "Time Logs",      icon: icons.calendar },
     ],
@@ -75,6 +78,9 @@ const SUPERVISOR_NAV = [
   { id: "employees",      label: "My Department",  icon: icons.users     },
   { id: "clocked_in_now", label: "Clocked In Now", icon: icons.live      },
   { id: "leave_records",  label: "Leave Records",  icon: icons.fileText  },
+  { id: "leave_balances", label: "Leave Balances", icon: icons.fileText  },
+  { id: "employment_history", label: "Employment History", icon: icons.history },
+  { id: "employee_exits", label: "Employee Exits", icon: icons.users     },
   { id: "time_log_claims", label: "OT Claims",    icon: icons.fileText  },
   { id: "time_logs",      label: "Clock In / Out", icon: icons.clock     },
   { id: "my_logs",        label: "My Time Logs",   icon: icons.calendar  },
@@ -86,6 +92,8 @@ const EMPLOYEE_NAV = [
   { id: "my_logs",       label: "My Time Logs",   icon: icons.calendar  },
   { id: "time_log_claims", label: "OT Claims",    icon: icons.fileText  },
   { id: "leave_records", label: "My Leave",       icon: icons.fileText  },
+  { id: "leave_balances", label: "My Leave Balances", icon: icons.fileText  },
+  { id: "employment_history", label: "My History", icon: icons.history  },
 ];
 
 function flattenNavSections(sections) {
@@ -146,6 +154,14 @@ function renderView(viewId, db, account, onDbChange) {
       return renderTimeLogs(db, account, onDbChange);
     case "my_logs":
       return renderMyLogs(db, account, onDbChange);
+    case "leave_balances":
+      return renderLeaveBalances(db, account, onDbChange);
+    case "employment_history":
+      return renderEmploymentHistory(db, account, onDbChange);
+    case "employee_exits":
+      return (isSystemAdmin(account) || isPayrollAdmin(account) || isSupervisor(account))
+        ? renderEmployeeExits(db, account, onDbChange)
+        : renderDashboard(db, account);
     case "employment_status":
       return adminConfig ? renderEmploymentStatus(db, onDbChange) : renderDashboard(db, account);
     case "work_schedules":

@@ -188,6 +188,7 @@ function renderDepartments(db, account, onDbChange) {
       return [
         `<span class="font-medium text-sm">${d.department_name}</span>`,
         `<span class="mono text-xs">${d.department_code || "—"}</span>`,
+        `<span class="text-sm">${d.supervisor_name || "—"}</span>`,
         `<span class="text-sm">${d.employee_count || 0}</span>`,
         salaryCell,
         actionsCell,
@@ -195,7 +196,7 @@ function renderDepartments(db, account, onDbChange) {
     });
 
     const table = buildTable(
-      ["Department", "Code", "Headcount", "Labor Cost Allocation", ""],
+      ["Department", "Code", "Supervisor", "Headcount", "Labor Cost Allocation", ""],
       rows,
       "No departments found."
     );
@@ -211,6 +212,7 @@ function renderDepartments(db, account, onDbChange) {
       department_name: "",
       department_code: "",
       labor_cost_allocation: 0,
+      supervisor_id: null,
     };
 
     const body = document.createElement("div");
@@ -222,8 +224,15 @@ function renderDepartments(db, account, onDbChange) {
     const fCode   = makeInput("text",   data.department_code,       "e.g. HR");
     const fBudget = makeInput("number", data.labor_cost_allocation);
 
+    const supervisorOpts = [
+      ["", "No Supervisor"],
+      ...db.employees.map(e => [e.employee_id, `${e.first_name} ${e.last_name}`])
+    ];
+    const fSupervisor = makeSelect(supervisorOpts, data.supervisor_id || "");
+
     body.appendChild(buildField("Department Name", fName));
     body.appendChild(buildField("Department Code", fCode));
+    body.appendChild(buildField("Supervisor", fSupervisor));
     body.appendChild(buildField("Labor Cost Budget (₱)", fBudget));
 
     const hint = document.createElement("div");
@@ -262,6 +271,7 @@ function renderDepartments(db, account, onDbChange) {
       const name   = fName.value.trim();
       const code   = fCode.value.trim();
       const budget = Number(fBudget.value) || 0;
+      const supervisorId = fSupervisor.value ? Number(fSupervisor.value) : null;
 
       if (!name) { errEl.textContent = "Department name is required."; errEl.style.display = "block"; return; }
       if (!code) { errEl.textContent = "Department code is required."; errEl.style.display = "block"; return; }
@@ -270,6 +280,7 @@ function renderDepartments(db, account, onDbChange) {
         department_name:       name,
         department_code:       code.toUpperCase(),
         labor_cost_allocation: budget,
+        supervisor_id:         supervisorId,
       };
       if (isEdit) payload.department_id = data.department_id;
 

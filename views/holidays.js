@@ -86,13 +86,12 @@ function renderHolidays(db, onDbChange) {
         `<span class="mono text-xs">${h.holiday_date}</span>`,
         `<span class="font-medium text-sm">${h.holiday_name}</span>`,
         typeBadge,
-        `<span class="mono text-xs" style="color:#6366f1;font-weight:600">${Number(h.rate_multiplier).toFixed(2)}×</span>`,
         actions,
       ];
     });
 
     card.appendChild(buildTable(
-      ["Date", "Holiday Name", "Type", "Rate Multiplier", ""],
+      ["Date", "Holiday Name", "Type", ""],
       rows,
       "No holidays found for this year."
     ));
@@ -147,7 +146,7 @@ function renderHolidays(db, onDbChange) {
   function openHolidayModal(existing) {
     const isEdit = !!existing;
     const data = isEdit ? { ...existing } : {
-      holiday_date: "", holiday_name: "", holiday_type: "Regular", rate_multiplier: 2.0,
+      holiday_date: "", holiday_name: "", holiday_type: "Regular",
     };
 
     const body = document.createElement("div");
@@ -155,9 +154,6 @@ function renderHolidays(db, onDbChange) {
 
     const fDate = makeInput("date", data.holiday_date || "");
     const fName = makeInput("text", data.holiday_name,  "e.g. Christmas Day");
-    const fMult = makeInput("number", data.rate_multiplier);
-    fMult.step = "0.01";
-    fMult.min  = "1";
 
     const fType = document.createElement("select");
     fType.className = "input";
@@ -169,25 +165,9 @@ function renderHolidays(db, onDbChange) {
       fType.appendChild(opt);
     });
 
-    // auto-set rate multiplier when type changes
-    fType.addEventListener("change", () => {
-      fMult.value = fType.value === "Regular" ? "2.00" : "1.30";
-    });
-
-    const grid = document.createElement("div");
-    grid.className = "grid-2";
-    grid.style.gap = "14px";
-    grid.appendChild(buildField("Holiday Type", fType));
-    grid.appendChild(buildField("Rate Multiplier", fMult));
-
     body.appendChild(buildField("Date", fDate));
     body.appendChild(buildField("Holiday Name", fName));
-    body.appendChild(grid);
-
-    const hint = document.createElement("div");
-    hint.style.cssText = "font-size:0.78rem;color:var(--text-muted)";
-    hint.textContent = "Regular holiday = 2.00×, Special holiday = 1.30× (Philippine standard rates)";
-    body.appendChild(hint);
+    body.appendChild(buildField("Holiday Type", fType));
 
     const errEl = document.createElement("div");
     errEl.className = "alert-error";
@@ -217,13 +197,11 @@ function renderHolidays(db, onDbChange) {
       const date = fDate.value;
       const name = fName.value.trim();
       const type = fType.value;
-      const mult = parseFloat(fMult.value);
 
       if (!date) { errEl.textContent = "Date is required."; errEl.style.display = "block"; return; }
       if (!name) { errEl.textContent = "Holiday name is required."; errEl.style.display = "block"; return; }
-      if (!mult || mult < 1) { errEl.textContent = "Rate multiplier must be at least 1."; errEl.style.display = "block"; return; }
 
-      const payload = { holiday_date: date, holiday_name: name, holiday_type: type, rate_multiplier: mult };
+      const payload = { holiday_date: date, holiday_name: name, holiday_type: type };
       if (isEdit) payload.holiday_id = data.holiday_id;
 
       errEl.style.display = "none";

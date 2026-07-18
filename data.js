@@ -55,6 +55,9 @@ async function fetchAllData() {
     payDifferentials,
     validationStatuses,
     timeLogClaims,
+    employmentHistory,
+    employeeExits,
+    leaveBalances,
   ] = await Promise.all([
     apiRequest("/employees.php"),
     apiRequest("/departments.php"),
@@ -73,6 +76,9 @@ async function fetchAllData() {
     safe(apiRequest("/pay_differentials.php")),
     safe(apiRequest("/validation_status.php")),
     safe(apiRequest("/time_log_claims.php")),
+    safe(apiRequest("/employment_history.php")),
+    safe(apiRequest("/employee_exits.php")),
+    safe(apiRequest("/leave_balances.php")),
   ]);
 
   return {
@@ -93,6 +99,9 @@ async function fetchAllData() {
     payDifferentials,
     validationStatuses,
     timeLogClaims,
+    employmentHistory,
+    employeeExits,
+    leaveBalances,
   };
 }
 
@@ -186,6 +195,53 @@ async function deleteLeaveType(body) {
   return apiRequest("/leave_types.php", { method: "DELETE", body: JSON.stringify(body) });
 }
 
+// ── Reports ───────────────────────────────────────────
+function buildReportQS(filters) {
+  const params = [];
+  if (filters.departmentId) {
+    params.push(`department_id=${encodeURIComponent(filters.departmentId)}`);
+  }
+  let dateFrom = "";
+  let dateTo = "";
+  if (filters.year) {
+    if (filters.month) {
+      const m = String(filters.month).padStart(2, '0');
+      dateFrom = `${filters.year}-${m}-01`;
+      const lastDay = new Date(filters.year, filters.month, 0).getDate();
+      dateTo = `${filters.year}-${m}-${String(lastDay).padStart(2, '0')}`;
+    } else {
+      dateFrom = `${filters.year}-01-01`;
+      dateTo = `${filters.year}-12-31`;
+    }
+  }
+  if (dateFrom) params.push(`date_from=${dateFrom}`);
+  if (dateTo) params.push(`date_to=${dateTo}`);
+  return params.length ? `&${params.join("&")}` : "";
+}
+async function fetchDepartmentLaborCostReport(filters) {
+  return apiRequest(`/reports.php?action=department_labor_cost${buildReportQS(filters)}`);
+}
+async function fetchEmployeeEarningsReport(filters) {
+  return apiRequest(`/reports.php?action=employee_earnings${buildReportQS(filters)}`);
+}
+
+// ── Employment History ────────────────────────────────
+async function fetchEmploymentHistory(params = "") {
+  const qs = params ? (params.startsWith("?") ? params : `?${params}`) : "";
+  return apiRequest(`/employment_history.php${qs}`);
+}
+
+// ── Employee Exits ────────────────────────────────────
+async function fetchEmployeeExits() {
+  return apiRequest("/employee_exits.php");
+}
+
+// ── Leave Balances ────────────────────────────────────
+async function fetchLeaveBalances(params = "") {
+  const qs = params ? (params.startsWith("?") ? params : `?${params}`) : "";
+  return apiRequest(`/leave_balances.php${qs}`);
+}
+
 // ── Empty shape ───────────────────────────────────────
 function emptyDb() {
   return {
@@ -202,5 +258,8 @@ function emptyDb() {
     payDifferentials: [],
     validationStatuses: [],
     timeLogClaims: [],
+    employmentHistory: [],
+    employeeExits: [],
+    leaveBalances: [],
   };
 }

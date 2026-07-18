@@ -51,14 +51,18 @@ function renderWorkSchedules(db, onDbChange) {
 
       return [
         `<span class="font-medium text-sm">${s.schedule_name}</span>`,
-        `<span class="mono text-xs">${s.start_time || "—"}</span>`,
-        `<span class="mono text-xs">${s.end_time   || "—"}</span>`,
+        `<span class="mono text-xs">${s.start_time || "—"} - ${s.end_time || "—"}</span>`,
+        `<span class="mono text-xs">${s.break_minutes || 0} min</span>`,
+        `<span class="mono text-xs">${Number(s.required_hours || 0).toFixed(2)}h</span>`,
+        `<span class="mono text-xs">${s.grace_minutes || 0}m grace / ${s.late_after_minutes || 0}m late</span>`,
+        `<span class="text-xs font-medium">${s.rest_day || "—"}</span>`,
+        `<span class="mono text-xs">${s.employee_count || 0}</span>`,
         actions,
       ];
     });
 
     card.appendChild(buildTable(
-      ["Schedule Name", "Start Time", "End Time", ""],
+      ["Schedule Name", "Shift Time", "Break", "Req. Hours", "Late Tolerance", "Rest Day", "Employees", ""],
       rows,
       "No work schedules defined."
     ));
@@ -112,7 +116,10 @@ function renderWorkSchedules(db, onDbChange) {
 
   function openScheduleModal(existing) {
     const isEdit = !!existing;
-    const data = isEdit ? { ...existing } : { schedule_name: "", start_time: "", end_time: "" };
+    const data = isEdit ? { ...existing } : {
+      schedule_name: "", start_time: "", end_time: "",
+      break_minutes: 60, required_hours: 8.00, grace_minutes: 15, late_after_minutes: 15, rest_day: "Sunday"
+    };
 
     const body = document.createElement("div");
     body.style.cssText = "display:flex;flex-direction:column;gap:14px";
@@ -120,15 +127,47 @@ function renderWorkSchedules(db, onDbChange) {
     const fName  = makeInput("text", data.schedule_name, "e.g. Morning Shift");
     const fStart = makeInput("time", data.start_time || "");
     const fEnd   = makeInput("time", data.end_time   || "");
+    const fBreak = makeInput("number", data.break_minutes ?? 60, "e.g. 60");
+    const fRequired = makeInput("number", data.required_hours ?? 8.00, "e.g. 8.0");
+    fRequired.step = "0.5";
+    fRequired.min = "0";
+    const fGrace = makeInput("number", data.grace_minutes ?? 15, "e.g. 15");
+    const fLate = makeInput("number", data.late_after_minutes ?? 15, "e.g. 15");
 
-    const grid = document.createElement("div");
-    grid.className = "grid-2";
-    grid.style.gap = "14px";
-    grid.appendChild(buildField("Start Time", fStart));
-    grid.appendChild(buildField("End Time",   fEnd));
+    const dayOpts = [
+      ["Sunday", "Sunday"],
+      ["Monday", "Monday"],
+      ["Tuesday", "Tuesday"],
+      ["Wednesday", "Wednesday"],
+      ["Thursday", "Thursday"],
+      ["Friday", "Friday"],
+      ["Saturday", "Saturday"]
+    ];
+    const fRest = makeSelect(dayOpts, data.rest_day || "Sunday");
+
+    const grid1 = document.createElement("div");
+    grid1.className = "grid-2";
+    grid1.style.gap = "14px";
+    grid1.appendChild(buildField("Start Time", fStart));
+    grid1.appendChild(buildField("End Time",   fEnd));
+
+    const grid2 = document.createElement("div");
+    grid2.className = "grid-2";
+    grid2.style.gap = "14px";
+    grid2.appendChild(buildField("Break Minutes", fBreak));
+    grid2.appendChild(buildField("Required Hours", fRequired));
+
+    const grid3 = document.createElement("div");
+    grid3.className = "grid-2";
+    grid3.style.gap = "14px";
+    grid3.appendChild(buildField("Grace Minutes", fGrace));
+    grid3.appendChild(buildField("Late After Minutes", fLate));
 
     body.appendChild(buildField("Schedule Name", fName));
-    body.appendChild(grid);
+    body.appendChild(grid1);
+    body.appendChild(grid2);
+    body.appendChild(grid3);
+    body.appendChild(buildField("Rest Day", fRest));
 
     const errEl = document.createElement("div");
     errEl.className = "alert-error";
@@ -158,6 +197,11 @@ function renderWorkSchedules(db, onDbChange) {
       const name  = fName.value.trim();
       const start = fStart.value;
       const end   = fEnd.value;
+      const breakMin = parseInt(fBreak.value) || 60;
+      const reqHours = parseFloat(fRequired.value) || 8.00;
+      const graceMin = parseInt(fGrace.value) || 15;
+      const lateMin  = parseInt(fLate.value) || 15;
+      const restDay  = fRest.value;
 
       if (!name) {
         errEl.textContent = "Schedule name is required.";
@@ -175,7 +219,16 @@ function renderWorkSchedules(db, onDbChange) {
         return;
       }
 
-      const payload = { schedule_name: name, start_time: start, end_time: end };
+      const payload = {
+        schedule_name: name,
+        start_time: start,
+        end_time: end,
+        break_minutes: breakMin,
+        required_hours: reqHours,
+        grace_minutes: graceMin,
+        late_after_minutes: lateMin,
+        rest_day: restDay
+      };
       if (isEdit) payload.schedule_id = data.schedule_id;
 
       errEl.style.display = "none";

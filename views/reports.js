@@ -11,7 +11,7 @@ function renderReports(db, onDbChange) {
   const page = document.createElement("div");
   page.className = "page";
 
-  page.appendChild(pageHeader("Reports", "Labor cost and earnings, based on logged hours"));
+  page.appendChild(pageHeader("Reports", "Time log counts and hours worked, based on logged hours"));
 
   const now = new Date();
   let filterDept  = "";
@@ -119,7 +119,7 @@ function renderReports(db, onDbChange) {
     }
 
     if (activeTab === "department") {
-      const totalCost  = deptRows.reduce((s, r) => s + r.total_labor_cost, 0);
+      const totalLogs  = deptRows.reduce((s, r) => s + r.total_time_logs, 0);
       const totalHours = deptRows.reduce((s, r) => s + r.total_hours_logged, 0);
 
       const rows = deptRows.map(r => {
@@ -128,13 +128,13 @@ function renderReports(db, onDbChange) {
           `<span class="text-xs font-medium">${r.department_name}</span>`,
           `<span class="text-xs text-gray">${dept?.department_code ?? "—"}</span>`,
           `<span class="mono text-xs">${r.employee_count}</span>`,
-          `<span class="mono text-xs">${Number(r.total_hours_logged).toFixed(2)}h</span>`,
-          `<span class="mono text-xs font-medium">${money(r.total_labor_cost)}</span>`,
+          `<span class="mono text-xs">${r.total_time_logs}</span>`,
+          `<span class="mono text-xs font-medium">${Number(r.total_hours_logged).toFixed(2)}h</span>`,
         ];
       });
 
       tableCard.appendChild(
-        buildTable(["Department", "Code", "Employees", "Total Hours", "Total Labor Cost"], rows,
+        buildTable(["Department", "Code", "Employees", "Time Logs", "Total Hours"], rows,
           "No time logs found for the selected filters.")
       );
 
@@ -143,24 +143,23 @@ function renderReports(db, onDbChange) {
         summary.style.cssText = "padding:12px 18px;border-top:1px solid var(--border,#e5e7eb);font-size:.8rem;display:flex;justify-content:space-between;";
         summary.innerHTML = `
           <span class="text-gray">${deptRows.length} department${deptRows.length !== 1 ? "s" : ""}</span>
-          <span class="font-medium">Total: ${totalHours.toFixed(2)}h · ${money(totalCost)}</span>
+          <span class="font-medium">Total: ${totalLogs} logs · ${totalHours.toFixed(2)}h</span>
         `;
         tableCard.appendChild(summary);
       }
     } else {
-      const totalEarnings = empRows.reduce((s, r) => s + r.total_earnings, 0);
-      const totalHours    = empRows.reduce((s, r) => s + r.total_hours_worked, 0);
+      const totalLogs  = empRows.reduce((s, r) => s + r.shifts_logged, 0);
+      const totalHours = empRows.reduce((s, r) => s + r.total_hours_worked, 0);
 
       const rows = empRows.map(r => [
         `<span class="text-xs font-medium">${r.full_name}</span>`,
         `<span class="text-xs text-gray">${r.department_name || "—"}</span>`,
-        `<span class="mono text-xs">₱${Number(r.current_hourly_rate).toFixed(2)}/hr</span>`,
-        `<span class="mono text-xs">${Number(r.total_hours_worked).toFixed(2)}h</span>`,
-        `<span class="mono text-xs font-medium">${money(r.total_earnings)}</span>`,
+        `<span class="mono text-xs">${r.shifts_logged}</span>`,
+        `<span class="mono text-xs font-medium">${Number(r.total_hours_worked).toFixed(2)}h</span>`,
       ]);
 
       tableCard.appendChild(
-        buildTable(["Employee", "Department", "Rate", "Total Hours", "Total Earnings"], rows,
+        buildTable(["Employee", "Department", "Time Logs", "Total Hours"], rows,
           "No time logs found for the selected filters.")
       );
 
@@ -169,7 +168,7 @@ function renderReports(db, onDbChange) {
         summary.style.cssText = "padding:12px 18px;border-top:1px solid var(--border,#e5e7eb);font-size:.8rem;display:flex;justify-content:space-between;";
         summary.innerHTML = `
           <span class="text-gray">${empRows.length} employee${empRows.length !== 1 ? "s" : ""}</span>
-          <span class="font-medium">Total: ${totalHours.toFixed(2)}h · ${money(totalEarnings)}</span>
+          <span class="font-medium">Total: ${totalLogs} logs · ${totalHours.toFixed(2)}h</span>
         `;
         tableCard.appendChild(summary);
       }

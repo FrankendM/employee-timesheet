@@ -49,22 +49,14 @@ function renderEmploymentTypes(db, onDbChange) {
       actions.appendChild(editBtn);
       actions.appendChild(delBtn);
 
-      const badge = document.createElement("span");
-      badge.className = "text-xs";
-      badge.style.cssText = t.requires_statutory_deductions
-        ? "color:#16a34a;font-weight:600"
-        : "color:var(--text-muted)";
-      badge.textContent = t.requires_statutory_deductions ? "Yes" : "No";
-
       return [
         `<span class="font-medium text-sm">${t.type_name}</span>`,
-        badge,
         actions,
       ];
     });
 
     card.appendChild(buildTable(
-      ["Type Name", "Requires Statutory Deductions", ""],
+      ["Type Name", ""],
       rows,
       "No employment types defined."
     ));
@@ -118,25 +110,13 @@ function renderEmploymentTypes(db, onDbChange) {
 
   function openTypeModal(existing) {
     const isEdit = !!existing;
-    const data = isEdit ? { ...existing } : { type_name: "", requires_statutory_deductions: true };
+    const data = isEdit ? { ...existing } : { type_name: "" };
 
     const body = document.createElement("div");
     body.style.cssText = "display:flex;flex-direction:column;gap:14px";
 
     const fName = makeInput("text", data.type_name, "e.g. Regular");
     body.appendChild(buildField("Type Name", fName));
-
-    // Checkbox for requires_statutory_deductions
-    const checkWrap = document.createElement("label");
-    checkWrap.style.cssText = "display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem";
-    const fCheck = document.createElement("input");
-    fCheck.type = "checkbox";
-    fCheck.checked = !!data.requires_statutory_deductions;
-    fCheck.style.width = "16px";
-    fCheck.style.height = "16px";
-    checkWrap.appendChild(fCheck);
-    checkWrap.appendChild(document.createTextNode("Requires Statutory Deductions (SSS, PhilHealth, Pag-IBIG)"));
-    body.appendChild(checkWrap);
 
     const errEl = document.createElement("div");
     errEl.className = "alert-error";
@@ -172,7 +152,6 @@ function renderEmploymentTypes(db, onDbChange) {
 
       const payload = {
         type_name: name,
-        requires_statutory_deductions: fCheck.checked,
       };
       if (isEdit) payload.employment_type_id = data.employment_type_id;
 
