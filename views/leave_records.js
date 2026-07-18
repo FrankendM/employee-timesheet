@@ -285,7 +285,13 @@ function renderLeaveRecords(db, account, onDbChange) {
     const days = leaveDayCount(leave.date_from, leave.date_to);
     const leaveGrid = document.createElement("div");
     leaveGrid.className = "detail-grid";
+    const leaveTypeMeta = (db.leaveTypes || []).find(t => t.leave_type_id === leave.leave_type_id);
+    const paidLabel = leaveTypeMeta
+      ? (leaveTypeMeta.is_paid ? `<span style="color:#16a34a;font-weight:600">Paid</span>` : `<span style="color:var(--text-muted);font-weight:600">Unpaid</span>`)
+      : "—";
+
     leaveGrid.appendChild(detailItem("Leave Type", leave.leave_type));
+    leaveGrid.appendChild(detailItem("Paid?", paidLabel));
     leaveGrid.appendChild(detailItem("Status", badge(leave.leave_status)));
     leaveGrid.appendChild(detailItem("From", fmtDate(leave.date_from)));
     leaveGrid.appendChild(detailItem("To", fmtDate(leave.date_to)));
