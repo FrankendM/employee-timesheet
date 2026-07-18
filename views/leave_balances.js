@@ -36,18 +36,28 @@ function renderLeaveBalances(db, account, onDbChange) {
   function render() {
     page.innerHTML = "";
 
-    let addBtn = null;
+    let headerActions = null;
     if (isPrivileged) {
-      addBtn = document.createElement("button");
+      headerActions = document.createElement("div");
+      headerActions.style.cssText = "display:flex;gap:8px;";
+
+      const rolloverBtn = document.createElement("button");
+      rolloverBtn.className = "btn btn-outline";
+      rolloverBtn.innerHTML = `${icons.history || ""} Roll Over to New Year`;
+      rolloverBtn.addEventListener("click", () => openRolloverModal());
+      headerActions.appendChild(rolloverBtn);
+
+      const addBtn = document.createElement("button");
       addBtn.className = "btn btn-primary";
       addBtn.innerHTML = `${icons.plus} Grant Leave Balance`;
       addBtn.addEventListener("click", () => openBalanceModal(null));
+      headerActions.appendChild(addBtn);
     }
 
     page.appendChild(pageHeader(
       "Leave Balances",
       "Manage employee leave entitlements and tracking",
-      addBtn
+      headerActions
     ));
 
     // Filter card
@@ -181,6 +191,90 @@ function renderLeaveBalances(db, account, onDbChange) {
         await apiRequest(`/leave_balances.php?id=${r.balance_id}`, { method: "DELETE" });
         await reloadBalances();
         showToast("Leave balance record deleted successfully.", "success");
+      }
+    });
+  }
+
+  function openRolloverModal() {
+    const thisYear = new Date().getFullYear();
+    const body = document.createElement("div");
+    body.style.cssText = "display:flex;flex-direction:column;gap:14px";
+
+    const note = document.createElement("p");
+    note.className = "text-sm text-gray";
+    note.textContent = "Creates next year's balance rows for every employee/leave-type combo that has a balance in the source year. Unused remaining days carry over as \"carried over days\"; entitled days reset to each leave type's default. Employees who already have a balance for the target year are skipped.";
+    body.appendChild(note);
+
+    const fFrom = makeInput("number", thisYear - 1);
+    const fTo = makeInput("number", thisYear);
+
+    const fCap = makeInput("number", "");
+    fCap.placeholder = "No cap (optional)";
+    fCap.min = "0";
+    fCap.step = "0.5";
+
+    const grid = document.createElement("div");
+    grid.className = "grid-2";
+    grid.style.gap = "14px";
+    grid.appendChild(buildField("From Year", fFrom));
+    grid.appendChild(buildField("To Year", fTo));
+
+    body.appendChild(grid);
+    body.appendChild(buildField("Max Carry-Over Days (optional cap)", fCap));
+
+    const errEl = document.createElement("div");
+    errEl.className = "alert-error";
+    errEl.style.display = "none";
+    body.appendChild(errEl);
+
+    const footer = document.createElement("div");
+    footer.className = "modal-footer";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn btn-outline";
+    cancelBtn.textContent = "Cancel";
+    const runBtn = document.createElement("button");
+    runBtn.className = "btn btn-primary";
+    runBtn.innerHTML = `${icons.check} Run Rollover`;
+    footer.appendChild(cancelBtn);
+    footer.appendChild(runBtn);
+    body.appendChild(footer);
+
+    const { close } = openModal({ title: "Roll Over Leave Balances", body });
+    cancelBtn.addEventListener("click", close);
+
+    runBtn.addEventListener("click", async () => {
+      const fromYear = Number(fFrom.value);
+      const toYear = Number(fTo.value);
+      const cap = fCap.value === "" ? null : parseFloat(fCap.value);
+
+      if (!fromYear || !toYear) {
+        errEl.textContent = "Both years are required.";
+        errEl.style.display = "block";
+        return;
+      }
+      if (toYear <= fromYear) {
+        errEl.textContent = "To Year must be after From Year.";
+        errEl.style.display = "block";
+        return;
+      }
+
+      errEl.style.display = "none";
+      runBtn.disabled = true;
+
+      try {
+        const result = await apiRequest("/leave_balances.php?action=rollover", {
+          method: "POST",
+          body: JSON.stringify({ from_year: fromYear, to_year: toYear, carry_over_cap: cap }),
+        });
+        close();
+        showToast(result.message || "Rollover complete.", "success");
+        filterYear = toYear;
+        await reloadBalances();
+      } catch (err) {
+        errEl.textContent = err.message || "Could not run rollover.";
+        errEl.style.display = "block";
+      } finally {
+        runBtn.disabled = false;
       }
     });
   }
