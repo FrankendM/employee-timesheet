@@ -368,9 +368,13 @@ const fRate    = makeInput("number", data.hourly_rate ?? 0, "0.00");
     body.appendChild(message);
 
     let fReason = null;
+    let fVoluntary = null;
     if (isActive) {
       fReason = makeInput("text", "", "e.g. Resigned to pursue further studies");
       body.appendChild(buildField("Exit Reason", fReason));
+
+      fVoluntary = makeSelect([["1", "Voluntary"], ["0", "Fired"]], "1");
+      body.appendChild(buildField("Exit Type", fVoluntary));
     }
 
     const errEl = document.createElement("div");
@@ -414,7 +418,7 @@ const fRate    = makeInput("number", data.hourly_rate ?? 0, "0.00");
         await updateEmployeeRequest(emp.employee_id, {
           ...emp,
           employment_status_id: newStatusId,
-          ...(isActive ? { exit_reason: fReason.value.trim(), is_voluntary: 1 } : {}),
+          ...(isActive ? { exit_reason: fReason.value.trim(), is_voluntary: Number(fVoluntary.value) } : {}),
         });
         db.employees = await apiRequest("/employees.php");
         onDbChange(db);
