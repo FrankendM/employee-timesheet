@@ -78,6 +78,12 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+// Every employee gets this many leave days per year, shared across ALL
+// leave types (sick, vacation, emergency, etc. all draw from the same
+// pool). Must match ANNUAL_LEAVE_DAYS in backend/middleware/helpers.php.
+const ANNUAL_LEAVE_DAYS = 12;
+const ANNUAL_LEAVE_DAYS_LABEL = String(ANNUAL_LEAVE_DAYS);
+
 function badgeClass(label) {
   const map = {
     Active: "badge-active", Inactive: "badge-inactive",

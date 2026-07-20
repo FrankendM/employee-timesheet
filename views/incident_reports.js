@@ -105,9 +105,10 @@ function renderIncidentReports(db, account, onDbChange) {
       actions.appendChild(viewBtn);
 
       const isOwnReport = r.reported_by_account_id === account.account_id;
-      const canAct = validatorView && (r.validation_status === "Pending" || r.validation_status === "Supervisor Approved") && !isOwnReport;
+      // 1 = Pending, 4 = Supervisor Approved (see validation_status table / PUT handler in incident_reports.php)
+      const canAct = validatorView && (r.validation_status_id === 1 || r.validation_status_id === 4) && !isOwnReport;
       if (canAct) {
-        if (isSupervisor(account) && r.validation_status === "Pending") {
+        if (isSupervisor(account) && r.validation_status_id === 1) {
           // Supervisors recommend (→4), not final confirm
           const recBtn = document.createElement("button");
           recBtn.className = "btn btn-ghost btn-sm";

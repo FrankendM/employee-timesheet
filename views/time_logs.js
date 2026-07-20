@@ -17,7 +17,7 @@ function renderClockInOut(db, account, onDbChange) {
   const page = document.createElement("div");
   page.className = "page";
 
-  if (isPureAdmin(account)) {
+  if (isSystemAdmin(account)) {
     page.appendChild(pageHeader("Time Logs", "Admin accounts do not clock in"));
     const info = document.createElement("div");
     info.className = "card";
@@ -474,6 +474,64 @@ function renderLogsView(db, account, onDbChange) {
 
   page.appendChild(pageHeader(title, subtitle));
 
+  // "My Logs"/"Time Logs" scope for claims mirrors the log scope above:
+  // company-wide for admins, self-only for everyone else (including
+  const claimsInScope = companyWide
+    ? db.timeLogClaims
+    : (db.timeLogClaims || []).filter(c => c.employee_id == empId);
+
+  function claimsForLog(logId) {
+    return claimsInScope.filter(c => c.log_id === logId);
+  }
+
+  function buildLogCorrectionBadge(logId) {
+    const approvedCorrection = claimsForLog(logId).find(
+      c => c.validation_status_id === 2 && (c.requested_hours != null || c.requested_clock_in || c.requested_clock_out)
+    );
+    if (!approvedCorrection) return null;
+    const parts = [];
+    if (approvedCorrection.requested_hours != null) parts.push(`+${Number(approvedCorrection.requested_hours).toFixed(1)}h`);
+    if (approvedCorrection.requested_clock_in || approvedCorrection.requested_clock_out) parts.push("⏰ adjusted");
+    const el = document.createElement("span");
+    el.style.cssText = "display:block;font-size:0.7rem;color:#92400e;margin-top:2px";
+    el.textContent = `${parts.join(" ")} (claim)`;
+    el.title = "Hours were adjusted by an approved claim";
+    return el;
+  }
+
+  // Tabs
+  let activeTab = "logs"; // "logs" | "claims"
+  const tabsRow = document.createElement("div");
+  tabsRow.className = "audit-tabs";
+  page.appendChild(tabsRow);
+
+  function renderTabs() {
+    tabsRow.innerHTML = "";
+    [
+      { id: "logs", label: "Time Logs" },
+      { id: "claims", label: "Sent for Validation" },
+    ].forEach(tab => {
+      const btn = document.createElement("button");
+      btn.className = `audit-tab${tab.id === activeTab ? " active" : ""}`;
+      btn.textContent = tab.label;
+      btn.addEventListener("click", () => {
+        if (activeTab === tab.id) return;
+        activeTab = tab.id;
+        renderTabs();
+        logsSection.style.display = activeTab === "logs" ? "" : "none";
+        claimsSection.style.display = activeTab === "claims" ? "" : "none";
+        if (activeTab === "claims") renderClaimsTable();
+      });
+      tabsRow.appendChild(btn);
+    });
+  }
+
+  const logsSection = document.createElement("div");
+  const claimsSection = document.createElement("div");
+  claimsSection.style.display = "none";
+  page.appendChild(logsSection);
+  page.appendChild(claimsSection);
+
   // Filters
   const filterBar = document.createElement("div");
   filterBar.style.cssText = "display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center";
@@ -570,12 +628,16 @@ function renderLogsView(db, account, onDbChange) {
   // Stats row
   const statsStrip = document.createElement("div");
   statsStrip.style.cssText = "display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap";
-  page.appendChild(filterBar);
-  page.appendChild(statsStrip);
+  logsSection.appendChild(filterBar);
+  logsSection.appendChild(statsStrip);
 
   const card = document.createElement("div");
   card.className = "card";
-  page.appendChild(card);
+  logsSection.appendChild(card);
+
+  const claimsCard = document.createElement("div");
+  claimsCard.className = "card";
+  claimsSection.appendChild(claimsCard);
 
   async function renderLogsTable() {
     card.innerHTML = "";
@@ -614,20 +676,30 @@ function renderLogsView(db, account, onDbChange) {
     const showEmployeeCol = companyWide;
     const headers = showEmployeeCol
       ? (canEdit
-          ? ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Break", "Valid", "Status", ""]
-          : ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Break", "Valid", "Status"])
-      : ["Date", "Clock In", "Clock Out", "Hours", "Break", "Valid", "Status"];
+          ? ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Overtime", "Holiday", "Break", "Valid", "Status", ""]
+          : ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Overtime", "Holiday", "Break", "Valid", "Status"])
+      : ["Date", "Clock In", "Clock Out", "Hours", "Overtime", "Holiday", "Break", "Valid", "Status"];
 
     const rows = filtered.map(l => {
       const dateStr     = fmtDate(logDate(l));
       const clockInStr  = fmtTime(l.clock_in);
       const clockOutStr = l.clock_out ? fmtTime(l.clock_out) : `<span style="color:var(--text-muted)">Active</span>`;
-      const hoursStr    = l.total_hours != null ? Number(l.total_hours).toFixed(2) + "h" : `<span style="color:var(--text-muted)">—</span>`;
       const breakStr    = `${l.break_minutes || 0}m`;
       const validStr    = l.hours_valid === false
         ? `<span style="color:#dc2626;font-size:0.78rem;font-weight:600">Invalid</span>`
         : `<span style="color:#16a34a;font-size:0.78rem;font-weight:600">Valid</span>`;
       const statusBadge = l.status_label ? badge(l.status_label) : "—";
+
+      const approvedForLog = claimsForLog(l.log_id).filter(c => c.validation_status_id === 2);
+      const otHours  = approvedForLog.reduce((s, c) => s + (c.overtime_hours != null ? Number(c.overtime_hours) : 0), 0);
+      const holHours = approvedForLog.reduce((s, c) => s + (c.holiday_hours  != null ? Number(c.holiday_hours)  : 0), 0);
+      const otStr    = otHours > 0  ? `<span class="mono text-xs">${otHours.toFixed(2)}h</span>`  : `<span style="color:var(--text-muted)">—</span>`;
+      const holStr   = holHours > 0 ? `<span class="mono text-xs">${holHours.toFixed(2)}h</span>` : `<span style="color:var(--text-muted)">—</span>`;
+
+      const hoursCell = document.createElement("div");
+      hoursCell.innerHTML = l.total_hours != null ? Number(l.total_hours).toFixed(2) + "h" : `<span style="color:var(--text-muted)">—</span>`;
+      const correctionBadge = buildLogCorrectionBadge(l.log_id);
+      if (correctionBadge) hoursCell.appendChild(correctionBadge);
 
       if (showEmployeeCol) {
         const empCell = document.createElement("div");
@@ -647,18 +719,65 @@ function renderLogsView(db, account, onDbChange) {
           }));
           actCell.appendChild(editBtn);
 
-          return [empCell, dateStr, clockInStr, clockOutStr, hoursStr, breakStr, validStr, statusBadge, actCell];
+          return [empCell, dateStr, clockInStr, clockOutStr, hoursCell, otStr, holStr, breakStr, validStr, statusBadge, actCell];
         }
 
-        return [empCell, dateStr, clockInStr, clockOutStr, hoursStr, breakStr, validStr, statusBadge];
+        return [empCell, dateStr, clockInStr, clockOutStr, hoursCell, otStr, holStr, breakStr, validStr, statusBadge];
       }
 
-      return [dateStr, clockInStr, clockOutStr, hoursStr, breakStr, validStr, statusBadge];
+      return [dateStr, clockInStr, clockOutStr, hoursCell, otStr, holStr, breakStr, validStr, statusBadge];
     });
 
     card.appendChild(buildTable(headers, rows, `No logs for selected period.`));
   }
 
+  function buildClaimCorrectionCell(c) {
+    const parts = [];
+    if (c.requested_clock_in)  parts.push("⏰ In");
+    if (c.requested_clock_out) parts.push("⏰ Out");
+    if (c.requested_hours != null) parts.push(`+${Number(c.requested_hours).toFixed(1)}h`);
+    if (!parts.length) return `<span class="text-xs text-gray">—</span>`;
+    const el = document.createElement("span");
+    el.style.cssText = "font-size:0.72rem;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-weight:500;white-space:nowrap";
+    el.textContent = parts.join(" ");
+    return el;
+  }
+
+  function renderClaimsTable() {
+    claimsCard.innerHTML = "";
+
+    // "Sent for Validation" = still in flight — filed and awaiting a final
+    // decision (Pending, or recommended by a supervisor and awaiting HR).
+    const inFlight = claimsInScope.filter(c => c.validation_status_id === 1 || c.validation_status_id === 4);
+
+    const headers = companyWide
+      ? ["Employee", "Work Date", "OT Hours", "Holiday Hrs", "Correction", "Status", "Filed"]
+      : ["Work Date", "OT Hours", "Holiday Hrs", "Correction", "Status", "Filed"];
+
+    const rows = inFlight.map(c => {
+      const base = [
+        `<span class="mono text-xs">${fmtDate(c.work_date)}</span>`,
+        `<span class="mono text-xs">${c.overtime_hours != null ? Number(c.overtime_hours).toFixed(2) + "h" : "—"}</span>`,
+        `<span class="mono text-xs">${c.holiday_hours  != null ? Number(c.holiday_hours).toFixed(2)  + "h" : "—"}</span>`,
+        buildClaimCorrectionCell(c),
+        badge(c.validation_status || "Pending"),
+        `<span class="mono text-xs text-gray">${fmtDate(c.created_at)}</span>`,
+      ];
+
+      if (companyWide) {
+        const empCell = document.createElement("div");
+        empCell.className = "emp-cell";
+        empCell.innerHTML = `${avatarHTML(c.employee_name || "?", "sm")}<span class="text-sm">${c.employee_name || "?"}</span>`;
+        return [empCell, ...base];
+      }
+
+      return base;
+    });
+
+    claimsCard.appendChild(buildTable(headers, rows, "No claims currently awaiting validation."));
+  }
+
+  renderTabs();
   renderLogsTable();
   return page;
 }
@@ -693,7 +812,7 @@ function openEditModal(log, db, onSaved) {
   fValid.type = "checkbox";
   fValid.checked = log.hours_valid !== false;
   validWrap.appendChild(fValid);
-  validWrap.appendChild(document.createTextNode("Hours valid for payroll"));
+  validWrap.appendChild(document.createTextNode("Hours valid for labor cost computation"));
 
   const hoursPreview = document.createElement("div");
   hoursPreview.style.cssText = "font-size:0.82rem;color:var(--text-muted);margin-top:-8px";

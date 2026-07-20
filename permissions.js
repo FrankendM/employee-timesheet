@@ -27,7 +27,7 @@ function isEmployee(account) {
   return accessLevel(account) === ACCESS.EMPLOYEE;
 }
 
-/** system_admin or human_resources — no clock-in, full admin tooling */
+/** system_admin or human_resources — full admin tooling (system_admin does not clock in; human_resources does) */
 function isPureAdmin(account) {
   const l = accessLevel(account);
   return l === ACCESS.SYSTEM_ADMIN || l === ACCESS.HUMAN_RESOURCES;
@@ -93,7 +93,7 @@ function canEditTimeLogs(account) {
 }
 
 function canClockIn(account) {
-  return isEmployee(account) || isSupervisor(account);
+  return isEmployee(account) || isSupervisor(account) || isHumanResources(account);
 }
 
 function canViewClockedInNow(account) {

@@ -16,35 +16,19 @@ const AUDIT_TABS = [
       ["account_delete", "Deleted"],
     ],
   },
-  {
-    id: "payroll",
-    label: "Payroll Approvals",
-    targetType: "payroll_period",
-    actions: [
-      ["", "All"],
-      ["payroll_approve", "Approved"],
-      ["payroll_unapprove", "Unapproved"],
-    ],
-  },
 ];
 
 const AUDIT_ACTION_META = {
   account_create:     { label: "Account Created",     badge: "badge-approved" },
   account_update:     { label: "Account Updated",      badge: "badge-info"     },
   account_delete:     { label: "Account Deleted",      badge: "badge-rejected" },
-  payroll_approve:    { label: "Payroll Approved",      badge: "badge-approved" },
-  payroll_unapprove:  { label: "Payroll Unapproved",    badge: "badge-late"     },
 };
 
 const AUDIT_FIELD_LABELS = {
   username: "Username", email: "Email", access_level: "Access Level",
   employee_id: "Employee", password: "Password",
-  department_id: "Department", period_year: "Year", period_month: "Month",
-  previously_approved_by: "Previously Approved By",
+  department_id: "Department",
 };
-
-const AUDIT_MONTH_NAMES = ["", "January","February","March","April","May","June",
-  "July","August","September","October","November","December"];
 
 function renderAuditLog(db, onDbChange) {
   const page = document.createElement("div");
@@ -52,7 +36,7 @@ function renderAuditLog(db, onDbChange) {
 
   page.appendChild(pageHeader(
     "Audit Log",
-    "Every account change and payroll approval, tracked automatically"
+    "Every account change, tracked automatically"
   ));
 
   let activeTabId  = "all";
@@ -170,13 +154,6 @@ function renderAuditLog(db, onDbChange) {
       }
       return uname ? `Account "${uname}"` : `Account #${entry.target_id ?? "—"}`;
     }
-    if (entry.target_type === "payroll_period") {
-      const d = entry.details || {};
-      const dept = db.departments.find(dp => dp.department_id === d.department_id);
-      const deptName = dept ? dept.department_name : (d.department_id ? `Dept #${d.department_id}` : "");
-      const period = d.period_month ? `${AUDIT_MONTH_NAMES[d.period_month]} ${d.period_year}` : "";
-      return [deptName, period].filter(Boolean).join(" — ") || `Payroll #${entry.target_id ?? "—"}`;
-    }
     return `${entry.target_type || "—"} #${entry.target_id ?? "—"}`;
   }
 
@@ -193,11 +170,6 @@ function renderAuditLog(db, onDbChange) {
     if (key === "department_id") {
       const dept = db.departments.find(d => d.department_id === val);
       return dept ? dept.department_name : `#${val}`;
-    }
-    if (key === "period_month") return AUDIT_MONTH_NAMES[val] || val;
-    if (key === "previously_approved_by") {
-      const acc = db.accounts.find(a => a.account_id === val);
-      return acc ? acc.username : `#${val}`;
     }
     return String(val);
   }

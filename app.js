@@ -68,7 +68,13 @@ const SYSTEM_ADMIN_NAV = [
 
 const HUMAN_RESOURCES_NAV = [
   SYSTEM_ADMIN_NAV[0],
-  SYSTEM_ADMIN_NAV[1],
+  {
+    label: "Workforce",
+    items: [
+      ...SYSTEM_ADMIN_NAV[1].items,
+      { id: "time_logs", label: "Clock In / Out", icon: icons.clock },
+    ],
+  },
   SYSTEM_ADMIN_NAV[2],
 ];
 

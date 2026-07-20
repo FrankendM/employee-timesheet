@@ -6,7 +6,6 @@ function renderLeaveBalances(db, account, onDbChange) {
   const isSupervisor = account && account.access_level === "supervisor";
 
   let searchVal = "";
-  let filterType = "";
   let filterYear = new Date().getFullYear();
   let balanceRows = [];
   let loading = false;
@@ -41,11 +40,11 @@ function renderLeaveBalances(db, account, onDbChange) {
       headerActions = document.createElement("div");
       headerActions.style.cssText = "display:flex;gap:8px;";
 
-      const rolloverBtn = document.createElement("button");
-      rolloverBtn.className = "btn btn-outline";
-      rolloverBtn.innerHTML = `${icons.history || ""} Roll Over to New Year`;
-      rolloverBtn.addEventListener("click", () => openRolloverModal());
-      headerActions.appendChild(rolloverBtn);
+      const resetBtn = document.createElement("button");
+      resetBtn.className = "btn btn-outline";
+      resetBtn.innerHTML = `${icons.history || ""} Reset for New Year`;
+      resetBtn.addEventListener("click", () => openResetModal());
+      headerActions.appendChild(resetBtn);
 
       const addBtn = document.createElement("button");
       addBtn.className = "btn btn-primary";
@@ -56,7 +55,7 @@ function renderLeaveBalances(db, account, onDbChange) {
 
     page.appendChild(pageHeader(
       "Leave Balances",
-      "Manage employee leave entitlements and tracking",
+      `Every employee gets ${ANNUAL_LEAVE_DAYS_LABEL} leave days per year, shared across all leave types`,
       headerActions
     ));
 
@@ -78,15 +77,6 @@ function renderLeaveBalances(db, account, onDbChange) {
     });
     filterRow.appendChild(searchBar);
 
-    // Leave Type Filter
-    const typeOpts = [["", "All Leave Types"], ...db.leaveTypes.map(t => [t.leave_type_id, t.leave_name])];
-    const typeSel = makeSelect(typeOpts, filterType);
-    typeSel.addEventListener("change", e => {
-      filterType = e.target.value;
-      renderTable();
-    });
-    filterRow.appendChild(buildField("Leave Type", typeSel));
-
     // Year Input Filter
     const yearInp = makeInput("number", filterYear, "Year");
     yearInp.style.width = "90px";
@@ -101,10 +91,8 @@ function renderLeaveBalances(db, account, onDbChange) {
     clearBtn.className = "btn btn-outline btn-sm";
     clearBtn.textContent = "Clear filters";
     clearBtn.addEventListener("click", () => {
-      filterType = "";
       filterYear = new Date().getFullYear();
       searchVal = "";
-      typeSel.value = "";
       yearInp.value = filterYear;
       searchBar.querySelector("input").value = "";
       reloadBalances();
@@ -139,7 +127,6 @@ function renderLeaveBalances(db, account, onDbChange) {
 
     const term = searchVal.toLowerCase().trim();
     const filtered = balanceRows.filter(r => {
-      if (filterType && String(r.leave_type_id) !== String(filterType)) return false;
       if (!term) return true;
       return (r.employee_name || "").toLowerCase().includes(term);
     });
@@ -167,24 +154,23 @@ function renderLeaveBalances(db, account, onDbChange) {
 
       return [
         `<span class="font-medium text-sm">${r.employee_name}</span>`,
-        `<span class="text-xs text-gray font-medium">${r.leave_type_name}</span>`,
+        `<span class="text-xs text-gray">${r.department_name || "—"}</span>`,
         `<span class="mono text-xs">${r.year}</span>`,
         `<span class="mono text-xs">${Number(r.entitled_days).toFixed(1)}d</span>`,
-        `<span class="mono text-xs">${Number(r.carried_over_days).toFixed(1)}d</span>`,
         `<span class="mono text-xs font-semibold text-gray">${Number(r.used_days).toFixed(1)}d</span>`,
         `<span class="mono text-sm font-bold" style="color: ${r.remaining_days > 0 ? '#16a34a' : 'var(--red, #ef4444)'}">${Number(r.remaining_days).toFixed(1)}d</span>`,
         actions
       ];
     });
 
-    const headers = ["Employee", "Leave Type", "Year", "Entitled", "Carried Over", "Used", "Remaining", ""];
+    const headers = ["Employee", "Department", "Year", "Entitled", "Used", "Remaining", ""];
     container.appendChild(buildTable(headers, rows, "No leave balances found for this selection."));
   }
 
   function deleteBalance(r) {
     openConfirmModal({
       title: "Delete Leave Balance",
-      message: `Are you sure you want to delete the ${r.year} ${r.leave_type_name} balance for "${r.employee_name}"?`,
+      message: `Are you sure you want to delete the ${r.year} leave balance for "${r.employee_name}"?`,
       keepLabel: "Keep Balance",
       confirmLabel: "Delete Balance",
       onConfirm: async () => {
@@ -195,32 +181,18 @@ function renderLeaveBalances(db, account, onDbChange) {
     });
   }
 
-  function openRolloverModal() {
+  function openResetModal() {
     const thisYear = new Date().getFullYear();
     const body = document.createElement("div");
     body.style.cssText = "display:flex;flex-direction:column;gap:14px";
 
     const note = document.createElement("p");
     note.className = "text-sm text-gray";
-    note.textContent = "Creates next year's balance rows for every employee/leave-type combo that has a balance in the source year. Unused remaining days carry over as \"carried over days\"; entitled days reset to each leave type's default. Employees who already have a balance for the target year are skipped.";
+    note.textContent = `Creates a fresh ${ANNUAL_LEAVE_DAYS_LABEL}-day balance for every active employee for the year below. The pool always resets flat — no carryover from the previous year. Employees who already have a balance for this year are skipped.`;
     body.appendChild(note);
 
-    const fFrom = makeInput("number", thisYear - 1);
-    const fTo = makeInput("number", thisYear);
-
-    const fCap = makeInput("number", "");
-    fCap.placeholder = "No cap (optional)";
-    fCap.min = "0";
-    fCap.step = "0.5";
-
-    const grid = document.createElement("div");
-    grid.className = "grid-2";
-    grid.style.gap = "14px";
-    grid.appendChild(buildField("From Year", fFrom));
-    grid.appendChild(buildField("To Year", fTo));
-
-    body.appendChild(grid);
-    body.appendChild(buildField("Max Carry-Over Days (optional cap)", fCap));
+    const fYear = makeInput("number", thisYear);
+    body.appendChild(buildField("Year", fYear));
 
     const errEl = document.createElement("div");
     errEl.className = "alert-error";
@@ -234,26 +206,19 @@ function renderLeaveBalances(db, account, onDbChange) {
     cancelBtn.textContent = "Cancel";
     const runBtn = document.createElement("button");
     runBtn.className = "btn btn-primary";
-    runBtn.innerHTML = `${icons.check} Run Rollover`;
+    runBtn.innerHTML = `${icons.check} Run Reset`;
     footer.appendChild(cancelBtn);
     footer.appendChild(runBtn);
     body.appendChild(footer);
 
-    const { close } = openModal({ title: "Roll Over Leave Balances", body });
+    const { close } = openModal({ title: "Reset Leave Balances for New Year", body });
     cancelBtn.addEventListener("click", close);
 
     runBtn.addEventListener("click", async () => {
-      const fromYear = Number(fFrom.value);
-      const toYear = Number(fTo.value);
-      const cap = fCap.value === "" ? null : parseFloat(fCap.value);
+      const year = Number(fYear.value);
 
-      if (!fromYear || !toYear) {
-        errEl.textContent = "Both years are required.";
-        errEl.style.display = "block";
-        return;
-      }
-      if (toYear <= fromYear) {
-        errEl.textContent = "To Year must be after From Year.";
+      if (!year) {
+        errEl.textContent = "Year is required.";
         errEl.style.display = "block";
         return;
       }
@@ -262,16 +227,16 @@ function renderLeaveBalances(db, account, onDbChange) {
       runBtn.disabled = true;
 
       try {
-        const result = await apiRequest("/leave_balances.php?action=rollover", {
+        const result = await apiRequest("/leave_balances.php?action=reset", {
           method: "POST",
-          body: JSON.stringify({ from_year: fromYear, to_year: toYear, carry_over_cap: cap }),
+          body: JSON.stringify({ year }),
         });
         close();
-        showToast(result.message || "Rollover complete.", "success");
-        filterYear = toYear;
+        showToast(result.message || "Reset complete.", "success");
+        filterYear = year;
         await reloadBalances();
       } catch (err) {
-        errEl.textContent = err.message || "Could not run rollover.";
+        errEl.textContent = err.message || "Could not run reset.";
         errEl.style.display = "block";
       } finally {
         runBtn.disabled = false;
@@ -283,7 +248,7 @@ function renderLeaveBalances(db, account, onDbChange) {
     if (!isPrivileged) return;
     const isEdit = !!existing;
     const data = isEdit ? { ...existing } : {
-      employee_id: "", leave_type_id: "", year: new Date().getFullYear(), entitled_days: 15.0, carried_over_days: 0.0, used_days: 0.0
+      employee_id: "", year: new Date().getFullYear(), entitled_days: ANNUAL_LEAVE_DAYS, used_days: 0.0
     };
 
     const body = document.createElement("div");
@@ -299,26 +264,12 @@ function renderLeaveBalances(db, account, onDbChange) {
       fEmp = makeSelect(empOpts, data.employee_id);
     }
 
-    let fType;
-    if (isEdit) {
-      fType = document.createElement("span");
-      fType.className = "text-xs font-semibold text-gray";
-      fType.textContent = data.leave_type_name;
-    } else {
-      const typeOpts = [["", "Select Leave Type"], ...db.leaveTypes.map(t => [t.leave_type_id, t.leave_name])];
-      fType = makeSelect(typeOpts, data.leave_type_id);
-    }
-
     const fYear = makeInput("number", data.year, "Year");
-    
-    // Numbers
+
+    // Numbers — one shared pool per employee/year, no per-type split.
     const fEntitled = makeInput("number", data.entitled_days);
     fEntitled.step = "0.5";
     fEntitled.min = "0";
-
-    const fCarried = makeInput("number", data.carried_over_days);
-    fCarried.step = "0.5";
-    fCarried.min = "0";
 
     const fUsed = makeInput("number", data.used_days);
     fUsed.step = "0.5";
@@ -327,34 +278,26 @@ function renderLeaveBalances(db, account, onDbChange) {
     // Auto calculate helper label
     const calcEl = document.createElement("div");
     calcEl.style.cssText = "font-size:0.75rem;font-weight:600;color:var(--text-muted);margin-top:2px;";
-    
+
     function updateCalc() {
       const ent = parseFloat(fEntitled.value) || 0.0;
-      const car = parseFloat(fCarried.value) || 0.0;
       const usd = parseFloat(fUsed.value) || 0.0;
-      const rem = ent + car - usd;
+      const rem = ent - usd;
       calcEl.innerHTML = `Calculated Remaining: <span style="color: ${rem >= 0 ? '#16a34a' : 'var(--red, #ef4444)'}">${rem.toFixed(1)} days</span>`;
     }
-    
-    [fEntitled, fCarried, fUsed].forEach(inp => inp.addEventListener("input", updateCalc));
+
+    [fEntitled, fUsed].forEach(inp => inp.addEventListener("input", updateCalc));
     updateCalc();
 
     const grid1 = document.createElement("div");
     grid1.className = "grid-2";
     grid1.style.gap = "14px";
-    grid1.appendChild(buildField("Leave Type", fType));
     grid1.appendChild(buildField("Year", fYear));
-
-    const grid2 = document.createElement("div");
-    grid2.className = "grid-3";
-    grid2.style.gap = "10px";
-    grid2.appendChild(buildField("Entitled Days", fEntitled));
-    grid2.appendChild(buildField("Carried Over", fCarried));
-    grid2.appendChild(buildField("Used Days", fUsed));
+    grid1.appendChild(buildField("Entitled Days", fEntitled));
 
     body.appendChild(buildField("Employee", fEmp));
     body.appendChild(grid1);
-    body.appendChild(grid2);
+    body.appendChild(buildField("Used Days", fUsed));
     body.appendChild(calcEl);
 
     const errEl = document.createElement("div");
@@ -383,22 +326,18 @@ function renderLeaveBalances(db, account, onDbChange) {
 
     saveBtn.addEventListener("click", async () => {
       const employeeId = isEdit ? data.employee_id : fEmp.value;
-      const leaveTypeId = isEdit ? data.leave_type_id : fType.value;
       const year = fYear.value;
       const entitled = parseFloat(fEntitled.value) || 0.0;
-      const carried = parseFloat(fCarried.value) || 0.0;
       const used = parseFloat(fUsed.value) || 0.0;
 
       if (!employeeId) { errEl.textContent = "Employee is required."; errEl.style.display = "block"; return; }
-      if (!leaveTypeId) { errEl.textContent = "Leave type is required."; errEl.style.display = "block"; return; }
       if (!year) { errEl.textContent = "Year is required."; errEl.style.display = "block"; return; }
 
       const payload = {
         employee_id: Number(employeeId),
-        leave_type_id: Number(leaveTypeId),
         year: Number(year),
         entitled_days: entitled,
-        carried_over_days: carried,
+        carried_over_days: 0.0,
         used_days: used
       };
       if (isEdit) payload.balance_id = data.balance_id;
